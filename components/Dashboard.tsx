@@ -602,14 +602,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (!roadmap) return;
     const now = Date.now();
 
+    // Find which phase the item belongs to and check its "before" completion status
     let phaseIndexToCheck = -1;
-    roadmap.forEach((p, idx) => {
-        if (p.items.find(i => i.id === itemId)) {
-            phaseIndexToCheck = idx;
+    let wasPhaseCompleted = false;
+    for (let i = 0; i < roadmap.length; i++) {
+        if (roadmap[i].items.some(item => item.id === itemId)) {
+            phaseIndexToCheck = i;
+            wasPhaseCompleted = roadmap[i].items.every(item => item.status === 'completed');
+            break;
         }
-    });
-
-    const wasPhaseCompleted = phaseIndexToCheck !== -1 && roadmap[phaseIndexToCheck].items.every(i => i.status === 'completed');
+    }
 
     const newRoadmap = roadmap.map(phase => ({
       ...phase,
@@ -627,12 +629,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setRoadmap(newRoadmap);
     saveRoadmap(user.id, career.id, newRoadmap);
 
+    // Now check the "after" completion status
     if (phaseIndexToCheck !== -1) {
         const isNowCompleted = newRoadmap[phaseIndexToCheck].items.every(i => i.status === 'completed');
         const isAllCompleted = newRoadmap.every(p => p.items.every(i => i.status === 'completed'));
 
         if (isNowCompleted && !wasPhaseCompleted && !isAllCompleted) {
-            setShowPhaseCompletionModal(true);
+            // Use a timeout to ensure the state update has rendered before showing modal
+            setTimeout(() => setShowPhaseCompletionModal(true), 100);
         }
     }
   };
@@ -690,30 +694,38 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const handleAdaptation = async (type: any, customTargetDate?: string) => {
       if (!currentCareerDetails || !roadmap) return;
+      
+      // Close modals before starting
+      setShowDateStrategyModal(false);
+      setShowPhaseCompletionModal(false);
       setIsAdapting(true);
+
       try {
           const completedPhases = roadmap.filter(p => p.items.every(i => i.status === 'completed'));
           const lastCompletedPhaseIndex = completedPhases.length; 
           const { educationYear, targetCompletionDate, experienceLevel, focusAreas } = currentCareerDetails;
           let targetDateToUse = customTargetDate || targetCompletionDate;
 
-          // If date changed, update user profile
+          // If date changed via modal, update user profile
           if (targetDateToUse !== targetCompletionDate) {
-              handleDateUpdateWithoutAI(targetDateToUse);
+              const updatedCareers = user.activeCareers.map(c => 
+                  c.careerId === career.id ? { ...c, targetCompletionDate: targetDateToUse } : c
+              );
+              const updatedUser = { ...user, activeCareers: updatedCareers };
+              setUser(updatedUser);
+              saveUser(updatedUser);
           }
 
           const contextStr = `User has completed ${completedPhases.length} phases. Proceed to generate the REMAINING phases starting from Phase ${lastCompletedPhaseIndex + 1}.`;
           const newPhases = await generateRoadmap(career.title, educationYear, targetDateToUse, experienceLevel, focusAreas || '', { type, progressStr: contextStr, startingPhaseNumber: lastCompletedPhaseIndex + 1 });
+          
           const finalMap = [...completedPhases, ...newPhases];
           setRoadmap(finalMap);
           saveRoadmap(user.id, career.id, finalMap);
-          
-          setShowDateStrategyModal(false);
-          setShowPhaseCompletionModal(false);
-          showToastMsg("Roadmap adapted by Nova.");
+          showToastMsg("Nova has re-architected your roadmap.");
       } catch (e) {
           console.error("Adaptation failed", e);
-          showToastMsg("AI busy. Please try again later.");
+          showToastMsg("AI is busy. Please try again later.");
       } finally {
           setIsAdapting(false);
       }
@@ -882,6 +894,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
   );
   
+  const AdaptingOverlay = () => (
+    <div className="fixed inset-0 z-[120] flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-xl p-4 animate-fade-in">
+        <div className="relative mb-8">
+            <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full animate-pulse"></div>
+            <div className="relative w-24 h-24 bg-slate-900 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/20 border border-slate-800">
+                <BrainCircuit className="h-12 w-12 text-indigo-400 animate-[spin_3s_linear_infinite]" />
+            </div>
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2">Re-architecting your path...</h2>
+        <p className="text-slate-400 max-w-md mx-auto text-center">Nova is analyzing your progress and adapting the roadmap for optimal performance.</p>
+    </div>
+  );
+
   const PhaseCompletionModal = () => (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl p-8 max-w-lg w-full text-center relative overflow-hidden shadow-2xl">
@@ -892,39 +917,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <p className="text-slate-300 mb-8">
                   {pacing.status === 'behind' ? "You've caught up a bit, but still behind schedule. Adapt?" : pacing.status === 'ahead' ? "You are crushing it! Want to speed up or go deeper?" : "Great pace! How would you like to proceed?"}
               </p>
-              {isAdapting ? (
-                    <div className="py-8 flex flex-col items-center gap-4">
-                         <div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
-                         <span className="text-indigo-400 font-medium">Nova is updating roadmap...</span>
-                    </div>
-              ) : (
-                  <div className="space-y-3 text-left">
-                      {pacing.status === 'behind' && (
-                          <>
-                            <button onClick={() => handleAdaptation('maintain_pressure')} className="w-full p-4 bg-slate-800 hover:bg-blue-900/20 border border-slate-700 hover:border-blue-500 rounded-xl transition-all flex items-center justify-between group">
-                                <div><div className="font-bold text-white mb-1">Maintain Timeline</div><div className="text-xs text-slate-400">Keep target date. Rearrange tasks to fit.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-blue-400" />
-                            </button>
-                            <button onClick={() => handleAdaptation('reduce_difficulty')} className="w-full p-4 bg-slate-800 hover:bg-emerald-900/20 border border-slate-700 hover:border-emerald-500 rounded-xl transition-all flex items-center justify-between group">
-                                <div><div className="font-bold text-white mb-1">Reduce Difficulty</div><div className="text-xs text-slate-400">Simplify remaining tasks to catch up.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-emerald-400" />
-                            </button>
-                          </>
-                      )}
-                      {pacing.status !== 'behind' && (
-                          <>
-                            <button onClick={() => handleAdaptation('redistribute')} className="w-full p-4 bg-slate-800 hover:bg-blue-900/20 border border-slate-700 hover:border-blue-500 rounded-xl transition-all flex items-center justify-between group">
-                                <div><div className="font-bold text-white mb-1">Change Pace (Relax)</div><div className="text-xs text-slate-400">Keep date. Spread tasks out more.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-blue-400" />
-                            </button>
-                            <button onClick={() => handleAdaptation('increase_difficulty_same_time')} className="w-full p-4 bg-slate-800 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500 rounded-xl transition-all flex items-center justify-between group">
-                                <div><div className="font-bold text-white mb-1">Increase Difficulty</div><div className="text-xs text-slate-400">Keep date. Add advanced challenges.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-purple-400" />
-                            </button>
-                            <button onClick={handleFinishQuicker} className="w-full p-4 bg-slate-800 hover:bg-emerald-900/20 border border-slate-700 hover:border-emerald-500 rounded-xl transition-all flex items-center justify-between group">
-                                <div><div className="font-bold text-white mb-1">Finish Quicker</div><div className="text-xs text-slate-400">Update target date to now.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-emerald-400" />
-                            </button>
-                          </>
-                      )}
-                  </div>
-              )}
-              {!isAdapting && <button onClick={() => setShowPhaseCompletionModal(false)} className="mt-6 text-slate-500 text-sm hover:text-white">Dismiss</button>}
+              <div className="space-y-3 text-left">
+                  {pacing.status === 'behind' && (
+                      <>
+                        <button onClick={() => handleAdaptation('maintain_pressure')} className="w-full p-4 bg-slate-800 hover:bg-blue-900/20 border border-slate-700 hover:border-blue-500 rounded-xl transition-all flex items-center justify-between group">
+                            <div><div className="font-bold text-white mb-1">Maintain Timeline</div><div className="text-xs text-slate-400">Keep target date. Rearrange tasks to fit.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-blue-400" />
+                        </button>
+                        <button onClick={() => handleAdaptation('reduce_difficulty')} className="w-full p-4 bg-slate-800 hover:bg-emerald-900/20 border border-slate-700 hover:border-emerald-500 rounded-xl transition-all flex items-center justify-between group">
+                            <div><div className="font-bold text-white mb-1">Reduce Difficulty</div><div className="text-xs text-slate-400">Simplify remaining tasks to catch up.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-emerald-400" />
+                        </button>
+                      </>
+                  )}
+                  {pacing.status !== 'behind' && (
+                      <>
+                        <button onClick={() => handleAdaptation('relax_pace')} className="w-full p-4 bg-slate-800 hover:bg-blue-900/20 border border-slate-700 hover:border-blue-500 rounded-xl transition-all flex items-center justify-between group">
+                            <div><div className="font-bold text-white mb-1">Change Pace (Relax)</div><div className="text-xs text-slate-400">Keep date. Spread tasks out more.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-blue-400" />
+                        </button>
+                        <button onClick={() => handleAdaptation('increase_difficulty_same_time')} className="w-full p-4 bg-slate-800 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500 rounded-xl transition-all flex items-center justify-between group">
+                            <div><div className="font-bold text-white mb-1">Increase Difficulty</div><div className="text-xs text-slate-400">Keep date. Add advanced challenges.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-purple-400" />
+                        </button>
+                        <button onClick={handleFinishQuicker} className="w-full p-4 bg-slate-800 hover:bg-emerald-900/20 border border-slate-700 hover:border-emerald-500 rounded-xl transition-all flex items-center justify-between group">
+                            <div><div className="font-bold text-white mb-1">Finish Quicker</div><div className="text-xs text-slate-400">Update target date to now.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-emerald-400" />
+                        </button>
+                      </>
+                  )}
+              </div>
+              <button onClick={() => setShowPhaseCompletionModal(false)} className="mt-6 text-slate-500 text-sm hover:text-white">Dismiss</button>
           </div>
       </div>
   );
@@ -965,41 +983,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl">
               <h2 className="text-2xl font-bold text-white mb-2">{dateStrategyType === 'extension' ? "Target Date Extended" : "Timeline Shortened"}</h2>
               <p className="text-slate-300 mb-8">{dateStrategyType === 'extension' ? "You have more time. How should Nova adapt?" : "You have less time. How should Nova adapt?"}</p>
-              {isAdapting ? (
-                    <div className="py-8 flex flex-col items-center gap-4">
-                         <div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
-                         <span className="text-indigo-400 font-medium">Nova is updating roadmap...</span>
-                    </div>
-              ) : (
-                  <div className="space-y-3 text-left">
-                      {dateStrategyType === 'extension' ? (
-                          <>
-                              <button onClick={() => handleAdaptation('increase_difficulty', pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500 rounded-xl transition-all flex items-center justify-between group">
-                                  <div><div className="font-bold text-white mb-1">Increase Difficulty</div><div className="text-xs text-slate-400">Add new advanced tasks to fill extra days.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-purple-400" />
-                              </button>
-                              <button onClick={() => handleAdaptation('relax_pace', pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-blue-900/20 border border-slate-700 hover:border-blue-500 rounded-xl transition-all flex items-center justify-between group">
-                                  <div><div className="font-bold text-white mb-1">Relax Pace</div><div className="text-xs text-slate-400">Redistribute existing tasks over more time.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-blue-400" />
-                              </button>
-                              <button onClick={() => handleDateUpdateWithoutAI(pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-emerald-900/20 border border-slate-700 hover:border-emerald-500 rounded-xl transition-all flex items-center justify-between group">
-                                  <div><div className="font-bold text-white mb-1">Keep It Free</div><div className="text-xs text-slate-400">Just update the date. No roadmap changes.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-emerald-400" />
-                              </button>
-                          </>
-                      ) : (
-                          <>
-                              <button onClick={() => handleAdaptation('challenge_me', pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-orange-900/20 border border-slate-700 hover:border-orange-500 rounded-xl transition-all text-left flex items-center justify-between group">
-                                  <div><div className="font-bold text-white mb-1">Challenge Me</div><div className="text-xs text-slate-400">Compress tasks to fit. Harder pace.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-orange-400" />
-                              </button>
-                              <button onClick={() => handleAdaptation('reduce_difficulty_and_scope', pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-blue-900/20 border border-slate-700 hover:border-blue-500 rounded-xl transition-all text-left flex items-center justify-between group">
-                                  <div><div className="font-bold text-white mb-1">Reduce Difficulty</div><div className="text-xs text-slate-400">Simplify the roadmap to maintain pace.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-blue-400" />
-                              </button>
-                               <button onClick={() => handleDateUpdateWithoutAI(pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-emerald-900/20 border border-slate-700 hover:border-emerald-500 rounded-xl transition-all flex items-center justify-between group">
-                                  <div><div className="font-bold text-white mb-1">Let It Free</div><div className="text-xs text-slate-400">Just update the date. No roadmap changes.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-emerald-400" />
-                              </button>
-                          </>
-                      )}
-                  </div>
-              )}
-              {!isAdapting && <button onClick={() => setShowDateStrategyModal(false)} className="mt-8 text-slate-500 text-sm hover:text-white">Cancel</button>}
+              <div className="space-y-3 text-left">
+                  {dateStrategyType === 'extension' ? (
+                      <>
+                          <button onClick={() => handleAdaptation('increase_difficulty', pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-purple-900/20 border border-slate-700 hover:border-purple-500 rounded-xl transition-all flex items-center justify-between group">
+                              <div><div className="font-bold text-white mb-1">Increase Difficulty</div><div className="text-xs text-slate-400">Add new advanced tasks to fill extra days.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-purple-400" />
+                          </button>
+                          <button onClick={() => handleAdaptation('relax_pace', pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-blue-900/20 border border-slate-700 hover:border-blue-500 rounded-xl transition-all flex items-center justify-between group">
+                              <div><div className="font-bold text-white mb-1">Relax Pace</div><div className="text-xs text-slate-400">Redistribute existing tasks over more time.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-blue-400" />
+                          </button>
+                          <button onClick={() => handleDateUpdateWithoutAI(pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-emerald-900/20 border border-slate-700 hover:border-emerald-500 rounded-xl transition-all flex items-center justify-between group">
+                              <div><div className="font-bold text-white mb-1">Keep It Free</div><div className="text-xs text-slate-400">Just update the date. No roadmap changes.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-emerald-400" />
+                          </button>
+                      </>
+                  ) : (
+                      <>
+                          <button onClick={() => handleAdaptation('challenge_me', pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-orange-900/20 border border-slate-700 hover:border-orange-500 rounded-xl transition-all text-left flex items-center justify-between group">
+                              <div><div className="font-bold text-white mb-1">Challenge Me</div><div className="text-xs text-slate-400">Compress tasks to fit. Harder pace.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-orange-400" />
+                          </button>
+                          <button onClick={() => handleAdaptation('reduce_difficulty_and_scope', pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-blue-900/20 border border-slate-700 hover:border-blue-500 rounded-xl transition-all text-left flex items-center justify-between group">
+                              <div><div className="font-bold text-white mb-1">Reduce Difficulty</div><div className="text-xs text-slate-400">Simplify the roadmap to maintain pace.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-blue-400" />
+                          </button>
+                           <button onClick={() => handleDateUpdateWithoutAI(pendingTargetDate)} className="w-full p-4 bg-slate-800 hover:bg-emerald-900/20 border border-slate-700 hover:border-emerald-500 rounded-xl transition-all flex items-center justify-between group">
+                              <div><div className="font-bold text-white mb-1">Let It Free</div><div className="text-xs text-slate-400">Just update the date. No roadmap changes.</div></div><ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-emerald-400" />
+                          </button>
+                      </>
+                  )}
+              </div>
+              <button onClick={() => setShowDateStrategyModal(false)} className="mt-8 text-slate-500 text-sm hover:text-white">Cancel</button>
           </div>
       </div>
   );
@@ -1298,6 +1309,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {careerToDelete && <DeleteCareerConfirmationModal />}
       {showDateEditModal && <DateEditModal />}
       {showDateStrategyModal && <DateStrategyModal />}
+      {isAdapting && <AdaptingOverlay />}
       {toast && <div className="fixed bottom-24 md:bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 border border-emerald-500/50 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-fade-in z-[100]"><CheckCircle2 className="h-5 w-5 text-emerald-500" /><span className="font-medium text-sm">{toast.message}</span></div>}
     </div>
   );
