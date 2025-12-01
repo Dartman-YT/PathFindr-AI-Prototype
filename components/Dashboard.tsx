@@ -1,12 +1,9 @@
 
-
-
 import React, { useEffect, useState, useRef } from 'react';
 import { UserProfile, CareerOption, RoadmapPhase, NewsItem, RoadmapItem, DailyQuizItem, InterviewQuestion, PracticeQuestion, SimulationScenario, ChatMessage } from '../types';
 import { Roadmap } from './Roadmap';
 import { fetchTechNews, generateRoadmap, calculateRemainingDays, generateDailyQuiz, generatePracticeTopics, generatePracticeQuestions, generateCompanyInterviewQuestions, generateSimulationScenario, generateChatResponse } from '../services/gemini';
 import { saveRoadmap, saveUser, getRoadmap, getCareerData, saveCareerData, setCurrentUser, getNewsCache, saveNewsCache, getDailyQuizCache, saveDailyQuizCache, deleteUser, getPracticeData, savePracticeData } from '../services/store';
-// FIX: Import 'Compass' icon to resolve reference error.
 import { Home, Map, Briefcase, User, LogOut, TrendingUp, PlusCircle, ChevronDown, ChevronUp, Clock, Trophy, AlertCircle, Target, Trash2, RotateCcw, PartyPopper, ArrowRight, Zap, Calendar, ExternalLink, X, RefreshCw, MessageSquare, CheckCircle2, Pencil, BrainCircuit, GraduationCap, Flame, Star, Search, Link, Building2, PlayCircle, Eye, EyeOff, ShieldAlert, Palette, Settings, Mail, Lock, CalendarDays, AlertTriangle, Moon, Sun, Send, Cpu, Sparkles, Compass } from 'lucide-react';
 
 interface DashboardProps {
@@ -26,7 +23,6 @@ interface QuizOptionProps {
   index: number;
   correctIndex: number;
   explanation: string;
-  key: string;
 }
 
 const QuizOption: React.FC<QuizOptionProps> = ({ option, index, correctIndex, explanation }) => {
@@ -425,9 +421,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       loadNews(homeSearchQuery);
   };
 
-  // FIX: Define the missing handlePracticeSearch function.
-  // The practice question filtering is handled reactively by a useEffect hook,
-  // so this function is only here to prevent an error on Enter key press.
   const handlePracticeSearch = () => {};
 
   // --- REFACTORED PRACTICE TAB LOGIC ---
@@ -881,24 +874,45 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }
 
   const daysRemaining = getDaysRemaining();
+  
+  // FIX: Stricter day-based pacing calculation
   const getPacingStatus = () => {
       if (!currentCareerDetails) return { status: 'on-track', days: 0, message: '' } as const;
-      const start = currentCareerDetails.addedAt;
-      const end = new Date(currentCareerDetails.targetCompletionDate).getTime();
-      const now = Date.now();
-      const totalDuration = end - start;
-      const elapsed = now - start;
-      if (totalDuration <= 0) return { status: 'critical', days: 0, message: 'Target date passed' } as const;
-      const expectedRatio = elapsed / totalDuration;
-      const actualRatio = progress / 100;
-      if (actualRatio >= expectedRatio + 0.05) return { status: 'ahead', days: 0, message: 'Ahead of schedule' } as const;
-      else if (actualRatio < expectedRatio - 0.1) {
-          const lagRatio = expectedRatio - actualRatio;
-          const lagDays = Math.ceil((lagRatio * totalDuration) / (1000 * 60 * 60 * 24));
-          return { status: 'behind', days: lagDays, message: `${lagDays} days behind` } as const;
+      
+      const startDate = new Date(currentCareerDetails.addedAt);
+      startDate.setHours(12, 0, 0, 0);
+      
+      const targetParts = currentCareerDetails.targetCompletionDate.split('-');
+      const targetDate = new Date(parseInt(targetParts[0]), parseInt(targetParts[1]) - 1, parseInt(targetParts[2]), 12, 0, 0);
+      
+      const today = new Date();
+      today.setHours(12, 0, 0, 0);
+
+      const totalDurationMs = targetDate.getTime() - startDate.getTime();
+      const totalDays = Math.max(1, Math.round(totalDurationMs / (1000 * 60 * 60 * 24)));
+      
+      const elapsedMs = today.getTime() - startDate.getTime();
+      const daysElapsed = Math.max(0, Math.round(elapsedMs / (1000 * 60 * 60 * 24)));
+
+      if (daysElapsed > totalDays) return { status: 'critical', days: daysElapsed - totalDays, message: 'Target date passed' } as const;
+
+      const expectedProgressRatio = daysElapsed / totalDays;
+      const actualProgressRatio = progress / 100;
+
+      // Positive diffRatio means ahead, negative means behind
+      const diffRatio = actualProgressRatio - expectedProgressRatio;
+      const diffDays = Math.round(diffRatio * totalDays);
+
+      if (diffDays >= 1) {
+           return { status: 'ahead', days: diffDays, message: `${diffDays} days ahead` } as const;
+      } else if (diffDays <= -1) { 
+           // Strictly trigger behind if late by 1 day or more
+           return { status: 'behind', days: Math.abs(diffDays), message: `${Math.abs(diffDays)} days behind` } as const;
       }
+
       return { status: 'on-track', days: 0, message: 'On track' } as const;
   };
+  
   const pacing = getPacingStatus();
 
   // --- MODAL COMPONENTS ---
