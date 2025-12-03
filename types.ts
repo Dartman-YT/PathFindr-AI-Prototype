@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   NEW = 'NEW',
   RETURNING = 'RETURNING'
@@ -12,7 +13,7 @@ export interface UserProfile {
   onboardingComplete: boolean;
   xp: number;
   streak: number;
-  lastQuizDate?: string; // YYYY-MM-DD
+  // lastQuizDate?: string; // YYYY-MM-DD - REMOVED FROM ROOT
   joinedAt?: number; // Timestamp of account creation
   theme?: 'indigo' | 'emerald' | 'rose' | 'amber' | 'cyan';
   // Support for multiple careers, each with its own timeline
@@ -25,6 +26,7 @@ export interface UserProfile {
     experienceLevel: 'beginner' | 'intermediate' | 'advanced';
     focusAreas?: string; // specific topics for upskilling
     lastAdaptationCheck?: number; // timestamp of last AI check
+    lastQuizDate?: string; // YYYY-MM-DD - ADDED HERE
   }[];
   currentCareerId?: string;
 }

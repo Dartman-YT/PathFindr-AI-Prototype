@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { UserProfile, CareerOption, RoadmapPhase, NewsItem, RoadmapItem, DailyQuizItem, InterviewQuestion, PracticeQuestion, SimulationScenario, ChatMessage } from '../types';
 import { Roadmap } from './Roadmap';
 import { fetchTechNews, generateRoadmap, calculateRemainingDays, generateDailyQuiz, generatePracticeTopics, generatePracticeQuestions, generateCompanyInterviewQuestions, generateSimulationScenario, generateChatResponse } from '../services/gemini';
@@ -27,8 +27,8 @@ const PracticeQuestionCard: React.FC<{ question: PracticeQuestion, index: number
         setSelectedIdx(idx);
     };
 
-    // FIX: Ensure correctIndex is treated as a number for comparison
-    const correctIdx = Number(question.correctIndex);
+    // FIX: Redundant Number() call removed as correctIndex is already typed as a number.
+    const correctIdx = question.correctIndex;
     const isAnswered = selectedIdx !== null;
     const isUserCorrect = selectedIdx === correctIdx;
 
@@ -100,7 +100,15 @@ const PracticeQuestionCard: React.FC<{ question: PracticeQuestion, index: number
                             </span>
                         )}
                     </div>
-                    <p className="text-slate-300 text-sm leading-relaxed">
+                    
+                    {!isUserCorrect && (
+                         <div className="mb-2 text-sm">
+                             <span className="font-semibold text-slate-400 text-xs uppercase tracking-wider block">Correct Answer</span>
+                             <p className="text-emerald-300 font-medium">{question.options[correctIdx]}</p>
+                         </div>
+                    )}
+
+                    <p className="text-slate-300 text-sm leading-relaxed pt-2 border-t border-slate-700/50 mt-2">
                         <span className="font-semibold text-slate-400 text-xs uppercase tracking-wider block mb-1">Explanation</span>
                         {question.explanation}
                     </p>
@@ -110,22 +118,7 @@ const PracticeQuestionCard: React.FC<{ question: PracticeQuestion, index: number
     );
 };
 
-const QuizOption: React.FC<any> = ({ option, index, correctIndex, explanation }) => {
-    const [selected, setSelected] = useState<boolean | null>(null);
-    const handleClick = () => { if (selected !== null) return; setSelected(index === correctIndex); };
-    const isCorrect = index === correctIndex;
-    const isSelected = selected !== null; 
-    let className = "w-full text-left p-4 rounded-xl border transition-all mb-2 flex justify-between items-center ";
-    if (!isSelected) { className += "bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-indigo-500"; } 
-    else { if (isCorrect) className += "bg-emerald-500/20 border-emerald-500 text-white"; else if (selected === false) className += "bg-red-500/20 border-red-500 text-white"; else className += "bg-slate-900 border-slate-700 text-slate-500 opacity-50"; }
-    return (
-        <div className="mb-2"><button onClick={handleClick} disabled={isSelected} className={className}><span>{option}</span>{isSelected && isCorrect && <CheckCircle2 className="h-5 w-5 text-emerald-400" />}{isSelected && selected === false && <AlertCircle className="h-5 w-5 text-red-400" />}</button>
-            {isSelected && (selected === false || isCorrect) && index === correctIndex && <div className="text-sm text-emerald-400 mt-1 pl-2 animate-fade-in"><span className="font-bold">Correct:</span> {explanation}</div>}
-            {isSelected && selected === false && <div className="text-sm text-red-400 mt-1 pl-2 animate-fade-in">Incorrect.</div>}
-        </div>
-    );
-};
-
+// FIX: Removed unused QuizOption component
 const CountdownTimer = () => {
     const [timeLeft, setTimeLeft] = useState('');
     useEffect(() => {
@@ -457,11 +450,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const diffDays = diffItems / itemsPerDay; // Positive = Ahead, Negative = Behind
 
       // FIX: SHOW "AHEAD" IF >= 1 DAY AHEAD.
-      // Logic: If you finish Day 1 work on Day 1, diffDays is ~0. If you finish Day 2 work on Day 1, diffDays is ~1. 
-      // We only want to show "Ahead" if you are truly speeding (e.g. >1.9 days ahead).
-      // Use Math.floor to be conservative (e.g. 1.9 days -> 1 day ahead, 2.5 days -> 2 days ahead).
+      // Logic: If diffDays is 1.1, you are more than 1 day ahead of schedule.
       if (diffDays >= 1) { 
            const d = Math.floor(diffDays);
+           if (d === 0) return { status: 'on-track', days: 0, message: 'On track' } as const;
            return { status: 'ahead', days: d, message: `${d} day${d > 1 ? 's' : ''} ahead` } as const;
       } else if (diffDays <= -1) { 
            const d = Math.ceil(Math.abs(diffDays));
