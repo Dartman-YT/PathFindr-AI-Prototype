@@ -3,6 +3,8 @@
 **PathFindr.AI** is an AI-powered career discovery and learning roadmap platform I’m actively building as a **startup project**.  
 The goal is to help students, job seekers, and professionals discover the right career path, build structured learning roadmaps, and stay on track with gamified progress and practice.
 
+See the Project in ACTION: https://path-findr-ai-prototype.vercel.app/
+
 This project is currently in **active development** and evolving rapidly.
 
 ---
