@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { RoadmapPhase, UserProfile, RoadmapItem } from '../types';
 import { Subscription } from './Subscription';
@@ -101,12 +100,6 @@ export const Roadmap: React.FC<RoadmapProps> = ({
       setResetConfirmInput('');
   };
 
-  const handleResetPhaseRequest = (e: React.MouseEvent, index: number) => {
-      e.stopPropagation();
-      setResetIntent({ type: 'phase', index });
-      setResetConfirmInput(''); 
-  };
-
   const handleTaskClick = (item: RoadmapItem) => {
       if (isLocked(item)) return;
       if (item.status === 'pending') {
@@ -164,15 +157,6 @@ export const Roadmap: React.FC<RoadmapProps> = ({
   const isPaid = user.subscriptionStatus !== 'free';
   const currentCareer = getActiveCareer();
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'project': return <Code className="h-4 w-4 text-cyan-400" />;
-      case 'internship': return <Briefcase className="h-4 w-4 text-purple-400" />;
-      case 'certificate': return <Award className="h-4 w-4 text-orange-400" />;
-      default: return <Zap className="h-4 w-4 text-indigo-400" />;
-    }
-  };
-
   return (
     <div className="relative min-h-[80vh] pb-10 w-full overflow-x-hidden">
       {!isPaid && <Subscription onSubscribe={onSubscribe} />}
@@ -217,7 +201,7 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                     <div className="flex items-center gap-3 text-xs text-slate-400">
                         <span className={`px-2 py-0.5 rounded-full font-bold border ${pacing.status === 'ahead' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : pacing.status === 'behind' ? 'bg-red-500/10 border-red-500 text-red-400' : 'bg-indigo-500/10 border-indigo-500 text-indigo-400'}`}>{pacing.message}</span>
                         <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
-                        <span>{daysRemaining} Tasks Pending</span>
+                        <span>{daysRemaining} Days Remaining</span>
                     </div>
                 </div>
                 <div className="flex items-center gap-3 w-full md:w-auto">
@@ -283,8 +267,6 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                                     const showDetails = expandedLearnMoreItems.has(item.id);
                                     const locked = isLocked(item);
                                     const done = item.status === 'completed';
-                                    const globalIndex = flatRoadmapItems.findIndex(i => i.id === item.id);
-                                    const dayLabel = `Day ${globalIndex + 1}`;
 
                                     return (
                                         <div key={item.id} className={`rounded-xl border transition-all overflow-hidden ${done ? 'bg-slate-900/50 border-slate-800/50 opacity-60' : locked ? 'bg-slate-950 border-slate-800 grayscale' : 'bg-slate-800/30 border-slate-700/50 hover:border-indigo-500/30'}`}>
@@ -294,13 +276,12 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                                                 </button>
                                                 <div className={`flex-1 min-w-0 ${locked ? 'opacity-40' : 'cursor-pointer'}`} onClick={() => !locked && handleTaskClick(item)}>
                                                     <div className="flex items-center gap-2 mb-0.5">
-                                                        <span className="text-[10px] font-black text-indigo-500 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 uppercase tracking-tighter shrink-0">{dayLabel}</span>
+                                                        <span className="text-[10px] font-black text-indigo-500 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 uppercase tracking-tighter shrink-0">{item.duration}</span>
                                                         <span className={`font-bold text-sm truncate ${done ? 'line-through text-slate-500' : 'text-slate-300'}`}>{item.title}</span>
                                                     </div>
                                                     <p className="text-[10px] text-slate-500 line-clamp-1">{item.description}</p>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    {locked && <span className="text-[9px] text-slate-600 font-bold uppercase hidden sm:block">Locked</span>}
                                                     <button onClick={(e) => toggleLearnMore(e, item)} className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${showDetails ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-white'}`}>Details</button>
                                                 </div>
                                             </div>
@@ -320,7 +301,6 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                                                             </div>
                                                         </div>
                                                     )}
-                                                    {item.link && <a href={item.link} target="_blank" rel="noreferrer" className="flex items-center justify-between p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20 text-indigo-400 font-bold hover:bg-indigo-500/10 transition-all"><span>Go to Resource</span><ExternalLink className="h-3 w-3" /></a>}
                                                 </div>
                                             )}
                                         </div>

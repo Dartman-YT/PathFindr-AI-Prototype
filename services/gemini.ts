@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { CareerOption, RoadmapPhase, NewsItem, RoadmapItem, SkillQuestion, DailyQuizItem, InterviewQuestion, PracticeQuestion, SimulationScenario, ChatMessage } from '../types';
 
@@ -145,12 +146,9 @@ export const searchCareers = async (query: string): Promise<CareerOption[]> => {
     
     STRICT INSTRUCTIONS:
     1. The FIRST result in your list MUST correspond exactly to the search term: "${trimmedQuery}".
-    2. Use the most professional standard title for this role (e.g., if user searches "UI", first title should be "UI Designer").
+    2. Use the most professional standard title for this role.
     3. The first result MUST have a fitScore of exactly 100.
-    4. The 2nd and 3rd results should be HIGHLY RELEVANT specializations or related variants (e.g., if searching "AI", suggest "Machine Learning Engineer" and "NLP Specialist").
-    5. DO NOT provide generic defaults.
-    
-    Return exactly 3 objects in a JSON array: [{id, title, description, fitScore, reason}].
+    4. Provide exactly 3 objects in a JSON array: [{id, title, description, fitScore, reason}].
   `;
 
   try {
@@ -159,106 +157,28 @@ export const searchCareers = async (query: string): Promise<CareerOption[]> => {
         model: 'gemini-3-flash-preview',
         contents: prompt,
         config: { 
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                title: { type: Type.STRING },
-                description: { type: Type.STRING },
-                fitScore: { type: Type.NUMBER },
-                reason: { type: Type.STRING },
-              },
-              required: ["id", "title", "description", "fitScore", "reason"]
-            },
-          }
+          responseMimeType: "application/json"
         },
       });
       
       const text = cleanJsonString(response.text || "[]");
       let data = JSON.parse(text);
-      
-      if (!Array.isArray(data)) {
-        if (data.careers) data = data.careers;
-        else data = [data];
-      }
+      if (!Array.isArray(data)) data = data.careers || [data];
 
       const generationId = Date.now().toString(36);
-      
-      let results: CareerOption[] = data.map((c: any, idx: number) => ({
+      return data.map((c: any, idx: number) => ({
         id: c.id || `search-${generationId}-${idx}`,
         title: c.title || formattedQuery,
-        description: c.description || `Specialized path in ${formattedQuery}.`,
+        description: c.description || `Path in ${formattedQuery}.`,
         fitScore: Number(c.fitScore) || (idx === 0 ? 100 : 85),
-        reason: c.reason || `Direct match for "${formattedQuery}".`
-      }));
-
-      // Ensure the top result is the literal search query
-      const existingMatchIndex = results.findIndex(r => 
-        r.title.toLowerCase().includes(trimmedQuery.toLowerCase()) || 
-        trimmedQuery.toLowerCase().includes(r.title.toLowerCase())
-      );
-      
-      if (existingMatchIndex !== -1) {
-          const match = results.splice(existingMatchIndex, 1)[0];
-          results.unshift({ ...match, fitScore: 100 });
-      } else {
-          const forcedMatch = {
-              id: `forced-${generationId}`,
-              title: formattedQuery,
-              description: results[0]?.description || `Core professional pathway for ${formattedQuery}.`,
-              fitScore: 100,
-              reason: `Direct literal match for your search: ${formattedQuery}.`
-          };
-          results.unshift(forcedMatch);
-      }
-
-      const uniqueResults: CareerOption[] = [];
-      const seenTitles = new Set();
-      for (const res of results) {
-          if (!seenTitles.has(res.title.toLowerCase())) {
-              uniqueResults.push(res);
-              seenTitles.add(res.title.toLowerCase());
-          }
-          if (uniqueResults.length === 3) break;
-      }
-
-      if (uniqueResults.length < 3) {
-        const fallbacks = getFallbackCareers(trimmedQuery);
-        for (const fb of fallbacks) {
-            if (!seenTitles.has(fb.title.toLowerCase())) {
-                uniqueResults.push(fb);
-                seenTitles.add(fb.title.toLowerCase());
-            }
-            if (uniqueResults.length === 3) break;
-        }
-      }
-
-      return uniqueResults.slice(0, 3);
+        reason: c.reason || `Match for "${formattedQuery}".`
+      })).slice(0, 3);
     })();
     
     return await withTimeout(searchPromise, 12000, getFallbackCareers(trimmedQuery));
   } catch (e) {
     console.error("Search failed:", e);
     return getFallbackCareers(trimmedQuery);
-  }
-};
-
-export const generateSkillQuiz = async (careerTitle: string): Promise<SkillQuestion[]> => {
-  const ai = getAI();
-  if (!ai) return [];
-  const prompt = `${NOVA_PERSONA} Generate 5 technical MCQ questions for: ${careerTitle}. JSON: [{id, question, options[], correctIndex, difficulty}].`;
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-    return JSON.parse(cleanJsonString(response.text || '[]'));
-  } catch (e) {
-    return [];
   }
 };
 
@@ -284,17 +204,22 @@ export const generateRoadmap = async (
     }
   }
 
+  // Adjust granularity for long timelines to avoid token limit while filling the time
+  const isLongTerm = totalDays > 45;
+  const itemsCountRequest = isLongTerm ? "at least 20 substantial tasks" : `exactly ${totalDays} daily tasks`;
+  const durationType = isLongTerm ? "blocks like '1 week', '10 days', or '1 month'" : "'1 day'";
+
   const prompt = `
       ${NOVA_PERSONA}
-      Create a career roadmap for: "${careerTitle}".
-      Duration: ${totalDays} Days. Level: ${expLevel}. Focus: "${focusAreas}".
+      Create a comprehensive career roadmap for: "${careerTitle}".
+      Total Plan Duration: ${totalDays} Days. Level: ${expLevel}. Focus: "${focusAreas}".
       
-      RULES:
-      1. Break into logical "Phases".
-      2. EACH Item MUST represent exactly 1 day of work.
-      3. Total items MUST match ~${totalDays}.
-      4. Crucial: Each item MUST have a detailed "explanation" property.
-      5. Include "suggestedResources" (array of {title, url}) for each item.
+      CRITICAL INSTRUCTIONS:
+      1. You MUST generate a sequence of tasks that covers the ENTIRE ${totalDays} day period.
+      2. For this ${totalDays} day plan, ${itemsCountRequest}.
+      3. For each task, assign a "duration" using ${durationType}.
+      4. The SUM of all task durations MUST equal exactly ${totalDays} days.
+      5. Each task MUST have a detailed "explanation" and "suggestedResources" array.
       
       Output JSON format: [{ phaseName: string, items: RoadmapItem[] }]
     `;
@@ -315,22 +240,13 @@ export const generateRoadmap = async (
 
       return data.map((phase: any, pIdx: number) => ({
         ...phase,
-        items: (phase.items || []).map((item: any, iIdx: number) => {
-          let resources = [];
-          if (Array.isArray(item.suggestedResources)) {
-            resources = item.suggestedResources;
-          } else if (item.suggestedResources && typeof item.suggestedResources === 'object') {
-            resources = [item.suggestedResources];
-          }
-
-          return {
-            ...item,
-            id: `task-${generationId}-${pIdx}-${taskIdCounter++}`,
-            status: 'pending',
-            duration: '1 day',
-            suggestedResources: resources
-          };
-        })
+        items: (phase.items || []).map((item: any) => ({
+          ...item,
+          id: `task-${generationId}-${pIdx}-${taskIdCounter++}`,
+          status: 'pending',
+          duration: item.duration || (isLongTerm ? '1 week' : '1 day'),
+          suggestedResources: Array.isArray(item.suggestedResources) ? item.suggestedResources : []
+        }))
       }));
     })();
 
@@ -372,6 +288,58 @@ export const generateDailyQuiz = async (careerTitle: string): Promise<DailyQuizI
     return JSON.parse(cleanJsonString(response.text || 'null'));
   } catch (e) {
     return getFallbackDailyQuiz(careerTitle);
+  }
+};
+
+// Fix: Add missing generateSkillQuiz function to resolve the import error in Onboarding.tsx.
+export const generateSkillQuiz = async (careerTitle: string): Promise<SkillQuestion[]> => {
+  const ai = getAI();
+  if (!ai) return getFallbackSkillQuiz(careerTitle);
+  
+  const prompt = `
+    ${NOVA_PERSONA}
+    Generate a 5-question skill calibration quiz for the career: "${careerTitle}".
+    The questions should increase in difficulty:
+    1. Beginner
+    2. Beginner
+    3. Intermediate
+    4. Intermediate
+    5. Advanced
+    
+    Return a JSON array: [{id, question, options[4], correctIndex, difficulty}].
+    Difficulty values MUST be one of: "beginner", "intermediate", "advanced".
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              question: { type: Type.STRING },
+              options: { 
+                type: Type.ARRAY, 
+                items: { type: Type.STRING } 
+              },
+              correctIndex: { type: Type.INTEGER },
+              difficulty: { type: Type.STRING },
+            },
+            required: ["id", "question", "options", "correctIndex", "difficulty"]
+          }
+        }
+      }
+    });
+    const text = cleanJsonString(response.text || '[]');
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("Skill quiz generation failed", e);
+    return getFallbackSkillQuiz(careerTitle);
   }
 };
 
@@ -442,23 +410,9 @@ export const generatePracticeDataBatch = async (careerTitle: string): Promise<Pr
   const prompt = `
     ${NOVA_PERSONA}
     Architect a complete practice set for the career: "${careerTitle}".
-    
-    TASK:
-    1. List 8 core sub-topics.
-    2. Create 10 foundational MCQs.
-    3. Create 5 interview questions for EACH of these companies/categories: "Google", "Amazon", "Microsoft", "Startups".
-    
-    Return in ONE single JSON object:
-    {
-      "topics": string[],
-      "questions": [{id, question, options[4], correctIndex, explanation, topic}],
-      "interviews": {
-        "Google": [{id, question, answer, explanation}],
-        "Amazon": [{id, question, answer, explanation}],
-        "Microsoft": [{id, question, answer, explanation}],
-        "Startups": [{id, question, answer, explanation}]
-      }
-    }
+    List 8 core sub-topics. Create 10 foundational MCQs.
+    Create 5 interview questions for categories: "Google", "Amazon", "Microsoft", "Startups".
+    Return in ONE single JSON object: { topics: string[], questions: [...], interviews: { Google: [...], ... } }
   `;
 
   try {
@@ -491,6 +445,29 @@ export const generatePracticeDataBatch = async (careerTitle: string): Promise<Pr
   }
 };
 
+const parseDurationInDays = (durationStr: string): number => {
+  const str = durationStr.toLowerCase();
+  const num = parseInt(str) || 1;
+  if (str.includes('week')) return num * 7;
+  if (str.includes('month')) return num * 30;
+  return num;
+};
+
+export const calculateRemainingDays = (roadmap: RoadmapPhase[]): number => {
+  if (!roadmap) return 0;
+  let totalDays = 0;
+  roadmap.forEach(p => {
+    if (p.items) {
+      p.items.forEach(i => {
+        if (i.status !== 'completed') {
+          totalDays += parseDurationInDays(i.duration);
+        }
+      });
+    }
+  });
+  return totalDays;
+};
+
 export const generateSimulationScenario = async (careerTitle: string): Promise<SimulationScenario> => {
   const ai = getAI();
   try {
@@ -520,26 +497,11 @@ export const generateChatResponse = async (message: string, careerTitle: string,
   }
 };
 
-export const calculateRemainingDays = (roadmap: RoadmapPhase[]): number => {
-  if (!roadmap) return 0;
-  let count = 0;
-  roadmap.forEach(p => {
-    if (p.items) {
-      p.items.forEach(i => {
-        if (i.status !== 'completed') {
-          count++;
-        }
-      });
-    }
-  });
-  return count;
-};
-
 const getFallbackRoadmap = (title: string): RoadmapPhase[] => [
   {
     phaseName: "Initial Foundations",
     items: [
-      { id: `fb-1`, title: `Introduction to ${title}`, description: "Essential starting point.", type: 'skill', duration: '1 day', status: 'pending', importance: 'high', explanation: "Starting is the hardest part. Begin here to build your base.", dependencies: [], suggestedResources: [] }
+      { id: `fb-1`, title: `Introduction to ${title}`, description: "Essential starting point.", type: 'skill', duration: '1 week', status: 'pending', importance: 'high', explanation: "Starting is the hardest part. Begin here to build your base.", dependencies: [], suggestedResources: [] }
     ]
   }
 ];
@@ -554,6 +516,15 @@ const getFallbackDailyQuiz = (topic: string): DailyQuizItem => ({
   correctIndex: 0,
   explanation: "Incremental growth builds long-term success."
 });
+
+// Fix: Add missing getFallbackSkillQuiz function.
+const getFallbackSkillQuiz = (careerTitle: string): SkillQuestion[] => [
+  { id: 'sq1', question: `What is a fundamental concept in ${careerTitle}?`, options: ["Option A", "Option B", "Option C", "Option D"], correctIndex: 0, difficulty: 'beginner' },
+  { id: 'sq2', question: `Which tool is most common for ${careerTitle}?`, options: ["Tool 1", "Tool 2", "Tool 3", "Tool 4"], correctIndex: 1, difficulty: 'beginner' },
+  { id: 'sq3', question: `How do you handle a typical ${careerTitle} challenge?`, options: ["Method 1", "Method 2", "Method 3", "Method 4"], correctIndex: 2, difficulty: 'intermediate' },
+  { id: 'sq4', question: `Advanced optimization in ${careerTitle} usually involves?`, options: ["Step A", "Step B", "Step C", "Step D"], correctIndex: 3, difficulty: 'intermediate' },
+  { id: 'sq5', question: `What is a complex edge case in ${careerTitle}?`, options: ["Case 1", "Case 2", "Case 3", "Case 4"], correctIndex: 0, difficulty: 'advanced' }
+];
 
 const getFallbackPracticeQuestions = (topic: string): PracticeQuestion[] => [
   { id: 'p1', question: `Core principle of ${topic}?`, options: ["Option A", "Option B", "Option C", "Option D"], correctIndex: 0, explanation: "Self-explanatory." }
