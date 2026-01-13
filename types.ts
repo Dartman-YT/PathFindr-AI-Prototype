@@ -1,5 +1,3 @@
-
-
 export enum UserRole {
   NEW = 'NEW',
   RETURNING = 'RETURNING'
@@ -13,10 +11,8 @@ export interface UserProfile {
   onboardingComplete: boolean;
   xp: number;
   streak: number;
-  // lastQuizDate?: string; // YYYY-MM-DD - REMOVED FROM ROOT
   joinedAt?: number; // Timestamp of account creation
   theme?: 'indigo' | 'emerald' | 'rose' | 'amber' | 'cyan';
-  // Support for multiple careers, each with its own timeline
   activeCareers: {
     careerId: string;
     title: string;
@@ -26,7 +22,7 @@ export interface UserProfile {
     experienceLevel: 'beginner' | 'intermediate' | 'advanced';
     focusAreas?: string; // specific topics for upskilling
     lastAdaptationCheck?: number; // timestamp of last AI check
-    lastQuizDate?: string; // YYYY-MM-DD - ADDED HERE
+    lastQuizDate?: string; // YYYY-MM-DD
   }[];
   currentCareerId?: string;
 }
@@ -51,7 +47,6 @@ export interface RoadmapItem {
   importance: 'high' | 'medium' | 'low';
   isAIAdaptation?: boolean; // To badge newly added items
   dependencies?: string[]; // IDs of tasks that must be completed first
-  // New fields for Learn More
   explanation?: string;
   suggestedResources?: { title: string; url: string }[];
 }
@@ -97,6 +92,7 @@ export interface InterviewQuestion {
     id: string;
     question: string;
     answer: string;
+    explanation?: string; // Detailed context/background
     company?: string;
 }
 

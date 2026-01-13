@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { CareerOption, SkillQuestion } from '../types';
 import { analyzeInterests, searchCareers, generateSkillQuiz } from '../services/gemini';
@@ -83,9 +82,9 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isNewUser = 
         setStep('psychometric');
     } else if (step === 'selection') {
         setStep('comment');
+    } else if (step === 'skill_quiz') {
+        setStep('selection');
     } else if (step === 'level_verification') {
-        setStep('skill_quiz');
-        setQuizStatus('active'); 
         setStep('selection');
     } else if (step === 'logistics') {
         setStep('level_verification');
@@ -124,11 +123,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isNewUser = 
           setStep('selection');
       } catch (e) {
           console.error(e);
-          setCareers([
-            { id: '1', title: 'Software Engineer', description: 'Based on your logic preference.', fitScore: 90, reason: 'High logic score.'},
-            { id: '2', title: 'Product Manager', description: 'Based on your leadership.', fitScore: 85, reason: 'Good social skills.'},
-            { id: '3', title: 'UX Designer', description: 'Based on your creative side.', fitScore: 80, reason: 'Visual thinker.'},
-          ]);
+          setCareers([]);
           setStep('selection');
       } finally {
           setIsAnalyzing(false);
@@ -324,7 +319,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isNewUser = 
         )}
 
         {step === 'selection' && (
-            <div className="max-w-6xl mx-auto w-full relative z-10">
+            <div className="max-w-6xl mx-auto w-full relative z-10 px-4">
                 <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
                     <div>
                         <button onClick={handleBack} className="flex items-center gap-2 text-slate-400 hover:text-white mb-4 transition-colors">
@@ -348,49 +343,60 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isNewUser = 
                                 setCareers(res);
                                 setIsSearching(false);
                             }}
-                            className="bg-slate-800 px-4 rounded-xl hover:bg-slate-700"
+                            className="bg-slate-800 px-4 rounded-xl hover:bg-slate-700 text-white"
                         >
-                            {isSearching ? '...' : <Search className="h-5 w-5" />}
+                            {isSearching ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
                         </button>
                     </div>
                 </div>
 
-                <div className="grid md:grid-cols-3 gap-6 mb-8">
-                    {careers.map(c => (
-                        <div 
-                            key={c.id} 
-                            onClick={() => handleCareerSelect(c)}
-                            className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 p-6 rounded-3xl hover:border-indigo-500 hover:bg-slate-800/80 transition-all cursor-pointer group relative overflow-hidden animate-fade-in"
-                        >
-                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <Target className="h-24 w-24 text-indigo-500" />
-                            </div>
-                            <div className="inline-block bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold mb-4 border border-emerald-500/20">
-                                {c.fitScore}% Match
-                            </div>
-                            <h3 className="text-2xl font-bold mb-2">{c.title}</h3>
-                            <p className="text-slate-400 text-sm mb-4 min-h-[40px]">{c.description}</p>
-                            <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800 text-xs text-slate-500">
-                                <span className="font-semibold text-slate-300">Nova says:</span> {c.reason}
-                            </div>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    {careers.length > 0 ? (
+                        <>
+                            {careers.map((c, idx) => (
+                                <div 
+                                    key={c.id || idx} 
+                                    onClick={() => handleCareerSelect(c)}
+                                    className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 p-6 rounded-3xl hover:border-indigo-500 hover:bg-slate-800/80 transition-all cursor-pointer group relative overflow-hidden animate-fade-in"
+                                >
+                                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                        <Target className="h-24 w-24 text-indigo-500" />
+                                    </div>
+                                    <div className="inline-block bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold mb-4 border border-emerald-500/20">
+                                        {c.fitScore}% Match
+                                    </div>
+                                    <h3 className="text-2xl font-bold mb-2 text-white">{c.title}</h3>
+                                    <p className="text-slate-400 text-sm mb-4 min-h-[40px] leading-relaxed">{c.description}</p>
+                                    <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800 text-xs text-slate-500">
+                                        <span className="font-semibold text-slate-300">Nova says:</span> {c.reason}
+                                    </div>
+                                </div>
+                            ))}
+                            
+                            {/* Show More Button */}
+                            {isAnalyzing ? (
+                                <div className="bg-slate-900/50 border border-slate-800 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center text-slate-500 animate-pulse">
+                                    <RefreshCw className="h-8 w-8 mb-2 animate-spin" />
+                                    <span className="text-sm font-medium">Finding more paths...</span>
+                                </div>
+                            ) : (
+                                <button 
+                                    onClick={handleShowMore}
+                                    className="bg-slate-900/50 border border-slate-700 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center text-slate-400 hover:text-white hover:border-indigo-500 hover:bg-indigo-500/10 transition-all group"
+                                >
+                                    <Plus className="h-10 w-10 mb-2 group-hover:scale-110 transition-transform" />
+                                    <span className="font-bold">Show More Matching</span>
+                                    <span className="text-xs mt-1">Discover distinct alternatives</span>
+                                </button>
+                            )}
+                        </>
+                    ) : !isAnalyzing && (
+                        <div className="col-span-full py-12 text-center bg-slate-900/50 border border-slate-800 rounded-3xl">
+                            <Bot className="h-12 w-12 text-slate-500 mx-auto mb-4" />
+                            <h3 className="text-xl font-bold text-white mb-2">No suggestions found</h3>
+                            <p className="text-slate-400 mb-6 max-w-sm mx-auto">Nova couldn't find matches for this query. Try a more general term or re-analyze.</p>
+                            <button onClick={submitAnalysis} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all">Try Re-Analysis</button>
                         </div>
-                    ))}
-                    
-                    {/* Show More Button */}
-                    {isAnalyzing ? (
-                        <div className="bg-slate-900/50 border border-slate-800 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center text-slate-500 animate-pulse">
-                            <RefreshCw className="h-8 w-8 mb-2 animate-spin" />
-                            <span className="text-sm font-medium">Finding more paths...</span>
-                        </div>
-                    ) : (
-                        <button 
-                            onClick={handleShowMore}
-                            className="bg-slate-900/50 border border-slate-700 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center text-slate-400 hover:text-white hover:border-indigo-500 hover:bg-indigo-500/10 transition-all group"
-                        >
-                            <Plus className="h-10 w-10 mb-2 group-hover:scale-110 transition-transform" />
-                            <span className="font-bold">Show More Matching</span>
-                            <span className="text-xs mt-1">Discover distinct alternatives</span>
-                        </button>
                     )}
                 </div>
             </div>

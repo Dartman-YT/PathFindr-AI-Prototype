@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { CareerOption, RoadmapPhase, NewsItem, RoadmapItem, SkillQuestion, DailyQuizItem, InterviewQuestion, PracticeQuestion, SimulationScenario, ChatMessage } from '../types';
 
@@ -28,6 +27,43 @@ const NOVA_PERSONA = `
   Your personality is futuristic, encouraging, analytical, and structured. 
   Keep responses concise but professional and inspiring.
 `;
+
+const getFallbackCareers = (query?: string): CareerOption[] => {
+  const normalizedQuery = query?.trim();
+  if (normalizedQuery && normalizedQuery.length > 0) {
+    const q = normalizedQuery;
+    const formattedQ = q.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    
+    return [
+      { 
+        id: `fb-${q}-1`, 
+        title: formattedQ, 
+        description: `Core professional pathway specializing in ${formattedQ} principles and modern implementation.`, 
+        fitScore: 100, 
+        reason: `Literal match for your search: ${formattedQ}.` 
+      },
+      { 
+        id: `fb-${q}-2`, 
+        title: `${formattedQ} Specialist`, 
+        description: `Advanced technical role focusing on specialized deep-dives into ${formattedQ} workflows.`, 
+        fitScore: 92, 
+        reason: `Direct specialization within the ${formattedQ} ecosystem.` 
+      },
+      { 
+        id: `fb-${q}-3`, 
+        title: `${formattedQ} Strategist`, 
+        description: `Strategic and consultative approach to deploying ${formattedQ} solutions at scale.`, 
+        fitScore: 85, 
+        reason: `High-level professional path based on ${formattedQ}.` 
+      }
+    ];
+  }
+  return [
+    { id: 'fb-def-1', title: 'Software Developer', description: 'Technical professional building digital solutions.', fitScore: 90, reason: 'Strong match for logical problem solving.' },
+    { id: 'fb-def-2', title: 'Data Scientist', description: 'Analyzing patterns to drive decision making.', fitScore: 85, reason: 'Matches data-driven curiosity.' },
+    { id: 'fb-def-3', title: 'UI/UX Designer', description: 'Designing intuitive user interfaces and experiences.', fitScore: 80, reason: 'Good for creative yet structured minds.' }
+  ];
+};
 
 export const analyzeInterests = async (
   inputs: { question: string, answer: string }[],
@@ -74,7 +110,18 @@ export const analyzeInterests = async (
         },
       });
       const text = cleanJsonString(response.text || "[]");
-      return JSON.parse(text).sort((a: any, b: any) => b.fitScore - a.fitScore);
+      let data = JSON.parse(text);
+      if (!Array.isArray(data) && data.careers) data = data.careers;
+      if (!Array.isArray(data)) data = [data];
+
+      const generationId = Date.now().toString(36);
+      return data.map((c: any, idx: number) => ({
+        id: c.id || `career-${generationId}-${idx}`,
+        title: c.title || "Career Path",
+        description: c.description || "A path discovered by Nova.",
+        fitScore: Number(c.fitScore) || 80,
+        reason: c.reason || "Matched based on your architectural profile."
+      })).sort((a: any, b: any) => b.fitScore - a.fitScore);
     })();
 
     return await withTimeout(analysisPromise, 15000, getFallbackCareers());
@@ -86,20 +133,116 @@ export const analyzeInterests = async (
 
 export const searchCareers = async (query: string): Promise<CareerOption[]> => {
   const ai = getAI();
-  if (!ai) return getFallbackCareers(query);
-  const prompt = `${NOVA_PERSONA} Find 3 careers for: "${query}". Return JSON array: {id, title, description, fitScore, reason}.`;
+  const trimmedQuery = query?.trim();
+  if (!trimmedQuery) return getFallbackCareers();
+  if (!ai) return getFallbackCareers(trimmedQuery);
+  
+  const formattedQuery = trimmedQuery.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
+  const prompt = `
+    ${NOVA_PERSONA}
+    USER QUERY: "${trimmedQuery}"
+    
+    STRICT INSTRUCTIONS:
+    1. The FIRST result in your list MUST correspond exactly to the search term: "${trimmedQuery}".
+    2. Use the most professional standard title for this role (e.g., if user searches "UI", first title should be "UI Designer").
+    3. The first result MUST have a fitScore of exactly 100.
+    4. The 2nd and 3rd results should be HIGHLY RELEVANT specializations or related variants (e.g., if searching "AI", suggest "Machine Learning Engineer" and "NLP Specialist").
+    5. DO NOT provide generic defaults.
+    
+    Return exactly 3 objects in a JSON array: [{id, title, description, fitScore, reason}].
+  `;
+
   try {
     const searchPromise = (async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { responseMimeType: "application/json" },
+        config: { 
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                title: { type: Type.STRING },
+                description: { type: Type.STRING },
+                fitScore: { type: Type.NUMBER },
+                reason: { type: Type.STRING },
+              },
+              required: ["id", "title", "description", "fitScore", "reason"]
+            },
+          }
+        },
       });
-      return JSON.parse(cleanJsonString(response.text || '[]'));
+      
+      const text = cleanJsonString(response.text || "[]");
+      let data = JSON.parse(text);
+      
+      if (!Array.isArray(data)) {
+        if (data.careers) data = data.careers;
+        else data = [data];
+      }
+
+      const generationId = Date.now().toString(36);
+      
+      let results: CareerOption[] = data.map((c: any, idx: number) => ({
+        id: c.id || `search-${generationId}-${idx}`,
+        title: c.title || formattedQuery,
+        description: c.description || `Specialized path in ${formattedQuery}.`,
+        fitScore: Number(c.fitScore) || (idx === 0 ? 100 : 85),
+        reason: c.reason || `Direct match for "${formattedQuery}".`
+      }));
+
+      // Ensure the top result is the literal search query
+      const existingMatchIndex = results.findIndex(r => 
+        r.title.toLowerCase().includes(trimmedQuery.toLowerCase()) || 
+        trimmedQuery.toLowerCase().includes(r.title.toLowerCase())
+      );
+      
+      if (existingMatchIndex !== -1) {
+          const match = results.splice(existingMatchIndex, 1)[0];
+          results.unshift({ ...match, fitScore: 100 });
+      } else {
+          const forcedMatch = {
+              id: `forced-${generationId}`,
+              title: formattedQuery,
+              description: results[0]?.description || `Core professional pathway for ${formattedQuery}.`,
+              fitScore: 100,
+              reason: `Direct literal match for your search: ${formattedQuery}.`
+          };
+          results.unshift(forcedMatch);
+      }
+
+      const uniqueResults: CareerOption[] = [];
+      const seenTitles = new Set();
+      for (const res of results) {
+          if (!seenTitles.has(res.title.toLowerCase())) {
+              uniqueResults.push(res);
+              seenTitles.add(res.title.toLowerCase());
+          }
+          if (uniqueResults.length === 3) break;
+      }
+
+      if (uniqueResults.length < 3) {
+        const fallbacks = getFallbackCareers(trimmedQuery);
+        for (const fb of fallbacks) {
+            if (!seenTitles.has(fb.title.toLowerCase())) {
+                uniqueResults.push(fb);
+                seenTitles.add(fb.title.toLowerCase());
+            }
+            if (uniqueResults.length === 3) break;
+        }
+      }
+
+      return uniqueResults.slice(0, 3);
     })();
-    return await withTimeout(searchPromise, 10000, getFallbackCareers(query));
+    
+    return await withTimeout(searchPromise, 12000, getFallbackCareers(trimmedQuery));
   } catch (e) {
-    return getFallbackCareers(query);
+    console.error("Search failed:", e);
+    return getFallbackCareers(trimmedQuery);
   }
 };
 
@@ -128,7 +271,6 @@ export const generateRoadmap = async (
   adaptationContext?: any
 ): Promise<RoadmapPhase[]> => {
   const ai = getAI();
-
   const start = new Date();
   start.setHours(12, 0, 0, 0);
 
@@ -169,12 +311,11 @@ export const generateRoadmap = async (
       if (!Array.isArray(data)) return [];
 
       let taskIdCounter = 1;
-      const generationId = Date.now().toString(36); // Unique ID for this generation run
+      const generationId = Date.now().toString(36);
 
       return data.map((phase: any, pIdx: number) => ({
         ...phase,
         items: (phase.items || []).map((item: any, iIdx: number) => {
-          // Normalize suggestedResources to always be an array
           let resources = [];
           if (Array.isArray(item.suggestedResources)) {
             resources = item.suggestedResources;
@@ -184,7 +325,6 @@ export const generateRoadmap = async (
 
           return {
             ...item,
-            // Create a truly unique and stable ID to prevent cross-task pollution
             id: `task-${generationId}-${pIdx}-${taskIdCounter++}`,
             status: 'pending',
             duration: '1 day',
@@ -268,15 +408,86 @@ export const generatePracticeQuestions = async (careerTitle: string, topic?: str
 export const generateCompanyInterviewQuestions = async (careerTitle: string, filter: string, customParams?: any): Promise<InterviewQuestion[]> => {
   const ai = getAI();
   if (!ai) return getFallbackInterviewQuestions(careerTitle);
+  const prompt = filter === 'AI Challenge' 
+    ? `Generate 10 advanced custom interview questions about "${customParams?.topic || careerTitle}" with difficulty ${customParams?.difficulty || 'Hard'}. JSON array: {id, question, answer, explanation, company}`
+    : `Generate 10 targeted interview questions for ${careerTitle} specifically for ${filter} style interviews. JSON array: {id, question, answer, explanation, company}`;
+
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Generate 15 interview questions for ${careerTitle} at ${filter}. JSON array: {id, question, answer, company}`,
+      contents: prompt,
       config: { responseMimeType: "application/json" }
     });
-    return JSON.parse(cleanJsonString(response.text || '[]'));
+    const results = JSON.parse(cleanJsonString(response.text || '[]'));
+    return results.map((r: any, idx: number) => ({
+        ...r,
+        id: r.id || `iq-${Date.now()}-${idx}`,
+        company: r.company || filter
+    }));
   } catch (e) {
     return getFallbackInterviewQuestions(careerTitle);
+  }
+};
+
+export interface PracticeBatchData {
+    topics: string[];
+    questions: PracticeQuestion[];
+    interviews: Record<string, InterviewQuestion[]>;
+}
+
+export const generatePracticeDataBatch = async (careerTitle: string): Promise<PracticeBatchData> => {
+  const ai = getAI();
+  if (!ai) return { topics: [], questions: [], interviews: {} };
+  
+  const prompt = `
+    ${NOVA_PERSONA}
+    Architect a complete practice set for the career: "${careerTitle}".
+    
+    TASK:
+    1. List 8 core sub-topics.
+    2. Create 10 foundational MCQs.
+    3. Create 5 interview questions for EACH of these companies/categories: "Google", "Amazon", "Microsoft", "Startups".
+    
+    Return in ONE single JSON object:
+    {
+      "topics": string[],
+      "questions": [{id, question, options[4], correctIndex, explanation, topic}],
+      "interviews": {
+        "Google": [{id, question, answer, explanation}],
+        "Amazon": [{id, question, answer, explanation}],
+        "Microsoft": [{id, question, answer, explanation}],
+        "Startups": [{id, question, answer, explanation}]
+      }
+    }
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    });
+    const data = JSON.parse(cleanJsonString(response.text || '{}'));
+    
+    const normalizedInterviews: Record<string, InterviewQuestion[]> = {};
+    if (data.interviews) {
+        Object.entries(data.interviews).forEach(([company, qs]) => {
+            normalizedInterviews[company] = (qs as any[]).map((q, idx) => ({
+                ...q,
+                id: q.id || `iq-batch-${company}-${idx}`,
+                company: company
+            }));
+        });
+    }
+
+    return {
+      topics: data.topics || [],
+      questions: data.questions || [],
+      interviews: normalizedInterviews
+    };
+  } catch (e) {
+    console.error("Batch practice generation failed", e);
+    return { topics: [], questions: [], interviews: {} };
   }
 };
 
@@ -324,12 +535,6 @@ export const calculateRemainingDays = (roadmap: RoadmapPhase[]): number => {
   return count;
 };
 
-const getFallbackCareers = (query?: string): CareerOption[] => [
-  { id: 'fb1', title: query || 'Software Developer', description: 'Technical professional building digital solutions.', fitScore: 90, reason: 'Strong match for logical problem solving.' },
-  { id: 'fb2', title: 'Data Scientist', description: 'Analyzing patterns to drive decision making.', fitScore: 85, reason: 'Matches data-driven curiosity.' },
-  { id: 'fb3', title: 'UI/UX Designer', description: 'Designing intuitive user interfaces and experiences.', fitScore: 80, reason: 'Good for creative yet structured minds.' }
-];
-
 const getFallbackRoadmap = (title: string): RoadmapPhase[] => [
   {
     phaseName: "Initial Foundations",
@@ -355,5 +560,5 @@ const getFallbackPracticeQuestions = (topic: string): PracticeQuestion[] => [
 ];
 
 const getFallbackInterviewQuestions = (topic: string): InterviewQuestion[] => [
-  { id: 'i1', question: "Why this career?", answer: "Passion and skill alignment.", company: "General" }
+  { id: 'i1', question: "Why this career?", answer: "Passion and skill alignment.", company: "General", explanation: "Confidence and clarity are key in foundational interviews." }
 ];

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Auth } from './components/Auth';
 import { Onboarding } from './components/Onboarding';
@@ -13,9 +12,10 @@ import {
     saveCareerData, 
     saveRoadmap,
     setCurrentUser,
-    deleteUser
+    deleteUser,
+    savePracticeData
 } from './services/store';
-import { generateRoadmap } from './services/gemini';
+import { generateRoadmap, generatePracticeDataBatch } from './services/gemini';
 import { Sparkles, Search, X, Compass } from 'lucide-react';
 
 const SplashScreen = () => (
@@ -65,7 +65,6 @@ const App: React.FC = () => {
       const savedRoadmap = getRoadmap(userId, careerId);
       
       setCareer(savedCareer);
-      // Ensure state is updated even if savedRoadmap is null to break loading state
       setRoadmap(savedRoadmap || []);
   };
 
@@ -120,7 +119,7 @@ const App: React.FC = () => {
     
     setUser(updatedUser);
     setCareer(selectedCareer);
-    setRoadmap(null); // Explicitly trigger loading UI for new roadmap
+    setRoadmap(null);
     setIsAddingCareer(false);
     setAddCareerMode(null);
     
@@ -128,12 +127,18 @@ const App: React.FC = () => {
     saveCareerData(user.id, selectedCareer.id, selectedCareer);
 
     try {
-        const generatedRoadmap = await generateRoadmap(selectedCareer.title, eduYear, targetDate, expLevel, focusAreas);
+        // Parallel fetch for Roadmap and initial Practice Batch to minimize wait time
+        const [generatedRoadmap, practiceData] = await Promise.all([
+            generateRoadmap(selectedCareer.title, eduYear, targetDate, expLevel, focusAreas),
+            generatePracticeDataBatch(selectedCareer.title)
+        ]);
+        
         setRoadmap(generatedRoadmap);
         saveRoadmap(user.id, selectedCareer.id, generatedRoadmap);
+        savePracticeData(user.id, selectedCareer.id, practiceData);
     } catch (e) {
-        console.error("Roadmap generation failed", e);
-        setRoadmap([]); // Break loading hang on error
+        console.error("Context generation failed", e);
+        setRoadmap([]);
     }
   };
 

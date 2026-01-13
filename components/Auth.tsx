@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { getUsers, saveUser, setCurrentUser } from '../services/store';
-import { Lock, User as UserIcon, Key, ArrowRight, Compass } from 'lucide-react';
+import { Lock, User as UserIcon, Key, ArrowRight, Compass, ShieldCheck } from 'lucide-react';
 
 interface AuthProps {
   onLogin: (user: UserProfile) => void;
@@ -12,6 +12,12 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [formData, setFormData] = useState({ id: '', password: '', securityKey: '', username: '' });
   const [error, setError] = useState('');
 
+  const validatePassword = (pass: string) => {
+    if (pass.length < 8) return "Password must be at least 8 characters long";
+    if (!/\d/.test(pass)) return "Password must contain at least one number";
+    return null;
+  };
+
   const handleSignup = () => {
     const users = getUsers();
     if (users[formData.id]) {
@@ -20,6 +26,12 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
     if (!formData.id || !formData.password || !formData.securityKey) {
       setError('All fields are required');
+      return;
+    }
+
+    const passError = validatePassword(formData.password);
+    if (passError) {
+      setError(passError);
       return;
     }
 
@@ -56,10 +68,11 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
      const users = getUsers();
      const user = users[formData.id];
      if (user && user.securityKey === formData.securityKey) {
-         alert(`Your password is: ${user.password}`);
+         alert(`Verification Successful. Your password is: ${user.password}`);
          setView('login');
+         setError('');
      } else {
-         setError('Invalid ID or Security Key');
+         setError('Verification failed. Invalid ID or Security Key.');
      }
   };
 
@@ -82,12 +95,17 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             <p className="text-slate-400 text-sm">
               {view === 'login' && 'Welcome back, Architect.'}
               {view === 'signup' && 'Design your future today.'}
-              {view === 'forgot' && 'Secure account recovery.'}
+              {view === 'forgot' && 'Account Recovery Mode'}
             </p>
           </div>
 
           <div className="space-y-4">
-            {error && <div className="p-3 text-sm text-red-400 bg-red-900/20 border border-red-900/50 rounded-lg text-center animate-fade-in">{error}</div>}
+            {error && (
+              <div className="p-3 text-sm text-red-400 bg-red-900/20 border border-red-900/50 rounded-lg text-center animate-fade-in flex items-center justify-center gap-2">
+                <ShieldCheck className="h-4 w-4 shrink-0" />
+                {error}
+              </div>
+            )}
             
             <div className="relative group">
               <UserIcon className="absolute left-3 top-3.5 h-5 w-5 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
@@ -131,7 +149,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <Key className="absolute left-3 top-3.5 h-5 w-5 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
                 <input 
                   type="text" 
-                  placeholder="Security Key (Remember this!)" 
+                  placeholder={view === 'forgot' ? "Your Secret Security Key" : "Security Key (For Recovery)"}
                   className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
                   value={formData.securityKey}
                   onChange={e => setFormData({...formData, securityKey: e.target.value})}
@@ -143,7 +161,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               onClick={view === 'login' ? handleLogin : view === 'signup' ? handleSignup : handleReset}
               className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-semibold rounded-xl shadow-lg shadow-indigo-900/20 transition-all transform active:scale-95 flex items-center justify-center gap-2"
             >
-              {view === 'login' ? 'Sign In' : view === 'signup' ? 'Create Account' : 'Recover Account'}
+              {view === 'login' ? 'Sign In' : view === 'signup' ? 'Create Account' : 'Verify & Recover'}
               <ArrowRight className="h-5 w-5" />
             </button>
           </div>

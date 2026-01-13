@@ -1,4 +1,3 @@
-
 import { UserProfile, CareerOption, RoadmapPhase, NewsItem, DailyQuizItem, PracticeQuestion, InterviewQuestion } from '../types';
 
 const KEYS = {
@@ -13,7 +12,6 @@ const KEYS = {
 
 export const saveUser = (user: UserProfile & { password?: string }) => {
   const users = getUsers();
-  // In a real app, we'd hash the password.
   users[user.id] = user;
   localStorage.setItem(KEYS.USERS, JSON.stringify(users));
 };
@@ -37,19 +35,15 @@ export const deleteUser = (userId: string) => {
     if (users[userId]) {
         delete users[userId];
         localStorage.setItem(KEYS.USERS, JSON.stringify(users));
-        
-        // Cleanup all associated data
         Object.keys(localStorage).forEach(key => {
             if (key.includes(userId)) {
                 localStorage.removeItem(key);
             }
         });
-        
         localStorage.removeItem(KEYS.CURRENT_USER_ID);
     }
 };
 
-// Save career details specifically for a user's selected career path
 export const saveCareerData = (userId: string, careerId: string, data: CareerOption) => {
   localStorage.setItem(`${KEYS.CAREER_DATA}${userId}_${careerId}`, JSON.stringify(data));
 };
@@ -59,7 +53,6 @@ export const getCareerData = (userId: string, careerId: string): CareerOption | 
   return str ? JSON.parse(str) : null;
 };
 
-// Roadmap is also specific to the career instance
 export const saveRoadmap = (userId: string, careerId: string, roadmap: RoadmapPhase[]) => {
   localStorage.setItem(`${KEYS.ROADMAP}${userId}_${careerId}`, JSON.stringify(roadmap));
 };
@@ -68,8 +61,6 @@ export const getRoadmap = (userId: string, careerId: string): RoadmapPhase[] | n
   const str = localStorage.getItem(`${KEYS.ROADMAP}${userId}_${careerId}`);
   return str ? JSON.parse(str) : null;
 };
-
-// --- CACHING FUNCTIONS ---
 
 export const saveNewsCache = (userId: string, careerId: string, news: NewsItem[]) => {
   const data = { timestamp: Date.now(), news };
@@ -80,7 +71,6 @@ export const getNewsCache = (userId: string, careerId: string): NewsItem[] | nul
   const str = localStorage.getItem(`${KEYS.NEWS_CACHE}${userId}_${careerId}`);
   if (!str) return null;
   const data = JSON.parse(str);
-  // Cache valid for 6 hours
   if (Date.now() - data.timestamp > 6 * 60 * 60 * 1000) return null;
   return data.news;
 };
@@ -96,17 +86,24 @@ export const getDailyQuizCache = (userId: string, careerId: string): DailyQuizIt
   return str ? JSON.parse(str) : null;
 };
 
-// --- PRACTICE DATA PERSISTENCE ---
-
-interface PracticeDataStore {
+export interface PracticeDataStore {
     topics: string[];
     questions: PracticeQuestion[];
-    interviews: InterviewQuestion[];
+    interviews: Record<string, InterviewQuestion[]>; // Filter -> Questions
 }
 
 export const savePracticeData = (userId: string, careerId: string, data: Partial<PracticeDataStore>) => {
-    const existing = getPracticeData(userId, careerId) || { topics: [], questions: [], interviews: [] };
+    const existing = getPracticeData(userId, careerId) || { topics: [], questions: [], interviews: {} };
     const merged = { ...existing, ...data };
+    
+    // Handle interview merge correctly
+    if (data.interviews) {
+        merged.interviews = { ...existing.interviews };
+        Object.entries(data.interviews).forEach(([key, val]) => {
+            merged.interviews[key] = val;
+        });
+    }
+
     localStorage.setItem(`${KEYS.PRACTICE_DATA}${userId}_${careerId}`, JSON.stringify(merged));
 };
 
