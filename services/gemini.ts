@@ -204,26 +204,23 @@ export const generateRoadmap = async (
     }
   }
 
-  // Use higher granularity for long timelines to avoid exceeding context while filling the days
-  const isLongTerm = totalDays > 60;
-  const durationType = isLongTerm ? "blocks like '1 week', '10 days', or '2 weeks'" : "'1 day'";
+  // Adjust granularity for long timelines to avoid token limit while filling the time
+  const isLongTerm = totalDays > 45;
+  const itemsCountRequest = isLongTerm ? "at least 20 substantial tasks" : `exactly ${totalDays} daily tasks`;
+  const durationType = isLongTerm ? "blocks like '1 week', '10 days', or '1 month'" : "'1 day'";
 
   const prompt = `
       ${NOVA_PERSONA}
       Create a comprehensive career roadmap for: "${careerTitle}".
-      Duration: ${totalDays} Days. Level: ${expLevel}. Focus: "${focusAreas}".
+      Total Plan Duration: ${totalDays} Days. Level: ${expLevel}. Focus: "${focusAreas}".
       
-      STRICT RULES:
-      1. Break into logical "Phases".
-      2. The total duration of all items MUST sum up exactly to ${totalDays} days.
-      3. For long timelines, use durations like "1 week", "10 days", etc. For short timelines, use "1 day" per item.
-      4. Each item MUST have:
-         - "title": Clear task name
-         - "duration": String like "1 day", "3 days", "1 week", etc.
-         - "explanation": Detailed guidance on WHAT to learn and WHY.
-         - "suggestedResources": Array of {title, url} relevant to the task.
+      CRITICAL INSTRUCTIONS:
+      1. You MUST generate a sequence of tasks that covers the ENTIRE ${totalDays} day period.
+      2. For this ${totalDays} day plan, ${itemsCountRequest}.
+      3. For each task, assign a "duration" using ${durationType}.
+      4. The SUM of all task durations MUST equal exactly ${totalDays} days.
+      5. Each task MUST have a detailed "explanation" and "suggestedResources" array.
       
-      The sum of these durations must be exactly ${totalDays}.
       Output JSON format: [{ phaseName: string, items: RoadmapItem[] }]
     `;
 
@@ -294,6 +291,7 @@ export const generateDailyQuiz = async (careerTitle: string): Promise<DailyQuizI
   }
 };
 
+// Fix: Add missing generateSkillQuiz function to resolve the import error in Onboarding.tsx.
 export const generateSkillQuiz = async (careerTitle: string): Promise<SkillQuestion[]> => {
   const ai = getAI();
   if (!ai) return getFallbackSkillQuiz(careerTitle);
@@ -301,8 +299,15 @@ export const generateSkillQuiz = async (careerTitle: string): Promise<SkillQuest
   const prompt = `
     ${NOVA_PERSONA}
     Generate a 5-question skill calibration quiz for the career: "${careerTitle}".
-    Difficulty values: "beginner", "intermediate", "advanced".
+    The questions should increase in difficulty:
+    1. Beginner
+    2. Beginner
+    3. Intermediate
+    4. Intermediate
+    5. Advanced
+    
     Return a JSON array: [{id, question, options[4], correctIndex, difficulty}].
+    Difficulty values MUST be one of: "beginner", "intermediate", "advanced".
   `;
 
   try {
@@ -318,7 +323,10 @@ export const generateSkillQuiz = async (careerTitle: string): Promise<SkillQuest
             properties: {
               id: { type: Type.STRING },
               question: { type: Type.STRING },
-              options: { type: Type.ARRAY, items: { type: Type.STRING } },
+              options: { 
+                type: Type.ARRAY, 
+                items: { type: Type.STRING } 
+              },
               correctIndex: { type: Type.INTEGER },
               difficulty: { type: Type.STRING },
             },
@@ -327,8 +335,10 @@ export const generateSkillQuiz = async (careerTitle: string): Promise<SkillQuest
         }
       }
     });
-    return JSON.parse(cleanJsonString(response.text || '[]'));
+    const text = cleanJsonString(response.text || '[]');
+    return JSON.parse(text);
   } catch (e) {
+    console.error("Skill quiz generation failed", e);
     return getFallbackSkillQuiz(careerTitle);
   }
 };
@@ -507,6 +517,7 @@ const getFallbackDailyQuiz = (topic: string): DailyQuizItem => ({
   explanation: "Incremental growth builds long-term success."
 });
 
+// Fix: Add missing getFallbackSkillQuiz function.
 const getFallbackSkillQuiz = (careerTitle: string): SkillQuestion[] => [
   { id: 'sq1', question: `What is a fundamental concept in ${careerTitle}?`, options: ["Option A", "Option B", "Option C", "Option D"], correctIndex: 0, difficulty: 'beginner' },
   { id: 'sq2', question: `Which tool is most common for ${careerTitle}?`, options: ["Tool 1", "Tool 2", "Tool 3", "Tool 4"], correctIndex: 1, difficulty: 'beginner' },
