@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { CareerOption, RoadmapPhase, NewsItem, RoadmapItem, SkillQuestion, DailyQuizItem, InterviewQuestion, PracticeQuestion, SimulationScenario, ChatMessage } from '../types';
+import { CareerOption, RoadmapPhase, NewsItem, RoadmapItem, SkillQuestion, DailyQuizItem, InterviewQuestion, PracticeQuestion, SimulationScenario, ChatMessage, RoadmapData } from '../types';
 
 const cleanJsonString = (str: string): string => {
   return str.replace(/```json\n?|```/g, "").trim();
@@ -96,7 +96,7 @@ export const generateRoadmap = async (
   expLevel: string,
   focusAreas: string,
   adaptationContext?: any
-): Promise<RoadmapPhase[]> => {
+): Promise<RoadmapData> => {
   const ai = getAI();
   const start = new Date();
   start.setHours(12, 0, 0, 0);
@@ -119,25 +119,28 @@ export const generateRoadmap = async (
       
       STRICT ARCHITECTURAL RULES:
       1. Every task is essentially a 1-day milestone.
-      2. You MUST include these four types of items:
+      2. Tasks MUST ONLY be of these three types:
          - "skill": Learning core concepts or technical topics.
-         - "project": Building something practical (MVPs, features, full projects).
-         - "certificate": Working towards or achieving a recognized certification.
-         - "internship": Steps for internship hunting, resume building, or simulated workplace tasks.
-      3. For a ${totalDays} day timeline, provide at least ${Math.min(50, totalDays)} discrete daily tasks.
-      4. Each task item MUST have:
+         - "project": Building practical features, MVPs, or scripts.
+         - "internship": Searching, applying, or simulating workplace tasks.
+      3. DO NOT include "certificate" as a task within the phases. Instead, suggest them in the "recommendedCertificates" section.
+      4. The VERY LAST item of the VERY LAST phase MUST be a "Capstone Revision & Confidence Project" (type: project). 
+         It must be comprehensive, requiring the user to apply everything learned in previous phases to build confidence.
+      5. Each task item MUST have:
          {
            "title": "Clear and descriptive task name",
            "description": "Short summary",
-           "type": "skill" | "project" | "certificate" | "internship",
+           "type": "skill" | "project" | "internship",
            "importance": "high" | "medium" | "low",
            "explanation": "Deep professional guidance",
            "suggestedResources": [{"title": "Name", "url": "URL"}]
          }
-      5. Resources must be specific (e.g., FreeCodeCamp, Coursera, official MDN, YouTube).
       
-      Organize into logical "Phases". Ensure the "title" is always present.
-      Output JSON format: [{ "phaseName": "Phase Title", "items": [...] }]
+      Output JSON format: 
+      {
+        "phases": [{ "phaseName": "Phase Title", "items": [...] }],
+        "recommendedCertificates": [{ "title": "Cert Name", "provider": "Coursera/AWS/etc", "url": "URL", "relevance": "Why this cert?" }]
+      }
     `;
 
   try {
@@ -147,12 +150,12 @@ export const generateRoadmap = async (
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
-    const data = JSON.parse(cleanJsonString(response.text || '[]'));
+    const data = JSON.parse(cleanJsonString(response.text || '{}'));
     
     let taskIdCounter = 1;
     const generationId = Date.now().toString(36);
 
-    return data.map((phase: any, pIdx: number) => ({
+    const processedPhases = (data.phases || []).map((phase: any, pIdx: number) => ({
       ...phase,
       items: (phase.items || []).map((item: any) => ({
         ...item,
@@ -163,9 +166,14 @@ export const generateRoadmap = async (
         suggestedResources: Array.isArray(item.suggestedResources) ? item.suggestedResources : []
       }))
     }));
+
+    return {
+      phases: processedPhases,
+      recommendedCertificates: data.recommendedCertificates || []
+    };
   } catch (e) {
     console.error("Roadmap generation failed", e);
-    return [];
+    return { phases: [], recommendedCertificates: [] };
   }
 };
 
@@ -178,12 +186,12 @@ export const generatePracticeDataBatch = async (careerTitle: string): Promise<an
     Generate a massive, high-fidelity practice and interview set for: "${careerTitle}".
     
     REQUIREMENTS:
-    1. List 10 specific technical sub-topics.
-    2. Generate 40 MCQs across all levels. Format: {id, question, options[4], correctIndex, explanation, topic}.
-    3. Generate 10 interview questions for EACH of these categories: "Google", "Amazon", "Microsoft", "Startups". 
-       Total of 40 interview questions. Format: {id, question, answer, explanation, company}.
+    1. List 12 specific technical sub-topics for this career.
+    2. Generate 50 high-quality technical MCQs across all levels (Easy, Medium, Hard). Format: {id, question, options[4], correctIndex, explanation, topic}.
+    3. Generate 12 interview questions for EACH of these categories: "Google", "Amazon", "Microsoft", "Netflix", "Meta", "Startups". 
+       Total of 72 distinct interview questions. Format: {id, question, answer, explanation, company}.
     
-    Return exactly ONE JSON object: { "topics": [...], "questions": [...], "interviews": { "Google": [...], "Amazon": [...], "Microsoft": [...], "Startups": [...] } }
+    Return exactly ONE JSON object: { "topics": [...], "questions": [...], "interviews": { "Google": [...], "Amazon": [...], "Microsoft": [...], "Netflix": [...], "Meta": [...], "Startups": [...] } }
   `;
 
   try {
@@ -235,22 +243,19 @@ export const fetchTechNews = async (topic: string): Promise<NewsItem[]> => {
           const urlObj = new URL(c.web.uri);
           const hostname = urlObj.hostname.toLowerCase().replace('www.', '');
           
-          // Scrub technical junk like vertexaisearch or internal IDs
           if (hostname.includes('vertexaisearch') || hostname.includes('google.com') || hostname.includes('googleapis')) {
             source = 'Tech Feed';
           } else {
-            // Take the domain part as a clean source name
             source = hostname.split('.')[0].toUpperCase();
           }
         } catch (e) {
           source = 'Verified';
         }
 
-        // Additional scrub for the title just in case
         let cleanTitle = c.web.title;
-        if (cleanTitle.includes('vertexaisearch')) {
-          cleanTitle = cleanTitle.split('vertexaisearch')[0].trim();
-        }
+        // Aggressive cleaning for technical metadata
+        cleanTitle = cleanTitle.replace(/vertexaisearch|internal_id|session_id|google_search_result/gi, "").trim();
+        if (cleanTitle.endsWith('-')) cleanTitle = cleanTitle.slice(0, -1).trim();
 
         newsItems.push({
           title: cleanTitle,
@@ -262,7 +267,6 @@ export const fetchTechNews = async (topic: string): Promise<NewsItem[]> => {
       }
     });
 
-    // Ensure we take up to 10
     return newsItems.slice(0, 10);
   } catch (e) {
     console.error("News fetch failed", e);
@@ -322,7 +326,7 @@ export const generatePracticeQuestions = async (careerTitle: string, topic?: str
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
-      contents: `Generate 10 technical MCQs for ${careerTitle} ${topic || ''}. JSON array: {id, question, options[4], correctIndex, explanation, topic}`,
+      contents: `Generate 15 additional technical MCQs for ${careerTitle} focusing on ${topic || 'diverse concepts'}. JSON array: {id, question, options[4], correctIndex, explanation, topic}`,
       config: { responseMimeType: "application/json" }
     });
     return JSON.parse(cleanJsonString(response.text || '[]'));
@@ -334,7 +338,7 @@ export const generatePracticeQuestions = async (careerTitle: string, topic?: str
 export const generateCompanyInterviewQuestions = async (careerTitle: string, filter: string, customParams?: any): Promise<InterviewQuestion[]> => {
   const ai = getAI();
   if (!ai) return [];
-  const prompt = `Generate 10 targeted interview questions for ${careerTitle} specifically for ${filter} style interviews. JSON array: {id, question, answer, explanation, company}`;
+  const prompt = `Generate 15 additional targeted interview questions for ${careerTitle} specifically for ${filter} style interviews. JSON array: {id, question, answer, explanation, company}`;
 
   try {
     const response = await ai.models.generateContent({

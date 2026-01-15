@@ -1,16 +1,16 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { UserProfile, CareerOption, RoadmapPhase, NewsItem, RoadmapItem, DailyQuizItem, InterviewQuestion, PracticeQuestion, SimulationScenario, ChatMessage } from '../types';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { UserProfile, CareerOption, RoadmapPhase, NewsItem, RoadmapItem, DailyQuizItem, InterviewQuestion, PracticeQuestion, SimulationScenario, ChatMessage, RoadmapData } from '../types';
 import { Roadmap } from './Roadmap';
-import { fetchTechNews, generateRoadmap, calculateRemainingDays, generateDailyQuiz, generatePracticeTopics, generatePracticeQuestions, generateCompanyInterviewQuestions, generateSimulationScenario, generateChatResponse } from '../services/gemini';
+import { fetchTechNews, generateRoadmap, calculateRemainingDays, generateDailyQuiz, generatePracticeTopics, generatePracticeQuestions, generateCompanyInterviewQuestions, generateSimulationScenario, generateChatResponse, generatePracticeDataBatch } from '../services/gemini';
 import { saveRoadmap, saveUser, getRoadmap, getCareerData, saveCareerData, setCurrentUser, getNewsCache, saveNewsCache, getDailyQuizCache, saveDailyQuizCache, deleteUser, getPracticeData, savePracticeData, PracticeDataStore } from '../services/store';
 import { Home, Map, Briefcase, User, LogOut, TrendingUp, PlusCircle, ChevronDown, ChevronUp, Clock, Trophy, AlertCircle, Target, Trash2, RotateCcw, PartyPopper, ArrowRight, Zap, Calendar, ExternalLink, X, RefreshCw, MessageSquare, CheckCircle2, Pencil, BrainCircuit, GraduationCap, Flame, Star, Search, Link, Building2, PlayCircle, Eye, EyeOff, ShieldAlert, Palette, Settings, Mail, Lock, CalendarDays, AlertTriangle, Moon, Sun, Send, Cpu, Sparkles, Compass, LayoutDashboard, BookOpen, Info } from 'lucide-react';
 
 interface DashboardProps {
   user: UserProfile;
   career: CareerOption;
-  roadmap: RoadmapPhase[] | null;
+  roadmap: RoadmapData | null;
   onLogout: () => void;
-  setRoadmap: (r: RoadmapPhase[] | null) => void;
+  setRoadmap: (r: RoadmapData | null) => void;
   setUser: (u: UserProfile) => void;
   setCareer: (c: CareerOption | null) => void;
   onAddCareer: (mode?: 'analysis' | 'search') => void;
@@ -119,7 +119,7 @@ const FeedbackModal = ({ onClose, text, setText }: { onClose: () => void, text: 
 
 const ConfirmationModal = ({ action, onConfirm, onCancel }: { action: {type: string, inputValue: string}, onConfirm: () => void, onCancel: () => void }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-        <div className="bg-slate-900 border border-red-500/30 p-6 rounded-3xl max-w-md w-full shadow-2xl">
+        <div className="bg-slate-900 border border-red-500/30 p-6 rounded-3xl max-md w-full shadow-2xl">
             <div className="flex items-center gap-3 mb-4 text-red-400">
                 <AlertTriangle className="h-6 w-6" />
                 <h2 className="text-xl font-bold">Are you sure?</h2>
@@ -137,7 +137,7 @@ const ConfirmationModal = ({ action, onConfirm, onCancel }: { action: {type: str
 
 const DeleteCareerConfirmationModal = ({ onConfirm, onCancel }: { onConfirm: () => void, onCancel: () => void }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-        <div className="bg-slate-900 border border-red-500/30 p-6 rounded-3xl max-w-md w-full shadow-2xl">
+        <div className="bg-slate-900 border border-red-500/30 p-6 rounded-3xl max-md w-full shadow-2xl">
             <div className="flex items-center gap-3 mb-4 text-red-400">
                 <Trash2 className="h-6 w-6" />
                 <h2 className="text-xl font-bold">Delete Career Path?</h2>
@@ -235,8 +235,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [practiceQuestionBank, setPracticeQuestionBank] = useState<PracticeQuestion[]>([]);
   const [interviewQuestionBank, setInterviewQuestionBank] = useState<Record<string, InterviewQuestion[]>>({});
-  const [practiceQuestions, setPracticeQuestions] = useState<PracticeQuestion[]>([]);
-  const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([]);
   const [visibleAnswers, setVisibleAnswers] = useState<Set<string>>(new Set());
   const [companyFilter, setCompanyFilter] = useState<string>('All');
   const [customGenTopic, setCustomGenTopic] = useState('');
@@ -306,8 +304,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   useEffect(() => { 
-      if (roadmap) { 
-          let total = 0; let completed = 0; roadmap.forEach(phase => { phase.items.forEach(item => { total++; if (item.status === 'completed') completed++; }); }); 
+      if (roadmap && roadmap.phases) { 
+          let total = 0; let completed = 0; roadmap.phases.forEach(phase => { phase.items.forEach(item => { total++; if (item.status === 'completed') completed++; }); }); 
           const calculatedProgress = total === 0 ? 0 : Math.round((completed / total) * 100); 
           if (calculatedProgress === 100 && progress !== 100 && progress !== 0) { setShowCelebration(true); } 
           setProgress(calculatedProgress); 
@@ -318,9 +316,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       if (activeTab === 'career') { 
           const stats: Record<string, { progress: number, daysLeft: number }> = {}; 
           user.activeCareers.forEach(c => { 
-              const r = getRoadmap(user.id, c.careerId) || []; 
-              const daysLeft = calculateRemainingDays(r);
-              let total = 0; let completed = 0; r.forEach(p => { p.items.forEach(i => { total++; if (i.status === 'completed') completed++; }); }); 
+              const r = getRoadmap(user.id, c.careerId); 
+              const phases = r?.phases || [];
+              const daysLeft = calculateRemainingDays(phases);
+              let total = 0; let completed = 0; phases.forEach(p => { p.items.forEach(i => { total++; if (i.status === 'completed') completed++; }); }); 
               const prog = total === 0 ? 0 : Math.round((completed / total) * 100); 
               stats[c.careerId] = { progress: prog, daysLeft }; 
           }); 
@@ -342,78 +341,57 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const handleHomeSearch = () => { loadNews(homeSearchQuery); };
 
-  const handlePracticeSearch = async () => { 
-      setIsPracticeLoading(true); 
-      if (practiceTab === 'quiz') { 
-          const qs = await generatePracticeQuestions(career.title, selectedTopic || undefined, practiceSearch); 
-          setPracticeQuestions(qs); 
-      } else if (practiceTab === 'interview') { 
-          if (!practiceSearch && interviewQuestionBank[companyFilter]) {
-              setInterviewQuestions(interviewQuestionBank[companyFilter]);
-          } else {
-              const params = companyFilter === 'AI Challenge' ? { topic: customGenTopic || career.title, difficulty: customGenDifficulty } : undefined; 
-              const qs = await generateCompanyInterviewQuestions(career.title, companyFilter, params); 
-              setInterviewQuestions(qs);
-              if (companyFilter !== 'AI Challenge' && !practiceSearch) {
-                  const updatedBank = { ...interviewQuestionBank, [companyFilter]: qs };
-                  setInterviewQuestionBank(updatedBank);
-                  savePracticeData(user.id, career.id, { interviews: updatedBank });
-              }
-          }
-      } else { 
-          const sim = await generateSimulationScenario(career.title); 
-          setSimulationScenario(sim); setSimAnswer(null); 
-      } 
-      setIsPracticeLoading(false); 
-  };
+  // Derived Filtered Lists (Satisfies local filtering from "cache memory")
+  const filteredPracticeQuestions = useMemo(() => {
+      let results = practiceQuestionBank;
+      if (selectedTopic) results = results.filter(q => q.topic === selectedTopic);
+      if (practiceSearch.trim()) {
+          const q = practiceSearch.toLowerCase();
+          results = results.filter(qObj => qObj.question.toLowerCase().includes(q) || (qObj.explanation && qObj.explanation.toLowerCase().includes(q)));
+      }
+      return results;
+  }, [practiceQuestionBank, selectedTopic, practiceSearch]);
 
+  const filteredInterviewQuestions = useMemo(() => {
+      let bank: InterviewQuestion[] = [];
+      if (companyFilter === 'All') {
+          bank = Object.values(interviewQuestionBank).flat();
+      } else {
+          bank = interviewQuestionBank[companyFilter] || [];
+      }
+      
+      if (!practiceSearch.trim()) return bank;
+      
+      const q = practiceSearch.toLowerCase();
+      return bank.filter(iq => iq.question.toLowerCase().includes(q) || iq.answer.toLowerCase().includes(q));
+  }, [interviewQuestionBank, companyFilter, practiceSearch]);
+
+  // Practice bank initialization strictly checks cache first (AI Once rule)
   useEffect(() => { 
       const initPracticeBank = async () => { 
           if (activeTab === 'practice') { 
-              setIsPracticeLoading(true); 
               const savedData = getPracticeData(user.id, career.id); 
               if (savedData && (savedData.questions?.length > 0 || Object.keys(savedData.interviews || {}).length > 0)) { 
                   setPracticeTopics(savedData.topics || []); 
                   setPracticeQuestionBank(savedData.questions || []); 
                   setInterviewQuestionBank(savedData.interviews || {}); 
-              } else { 
-                  try { 
-                      const [topics, qs, iqs] = await Promise.all([
-                          generatePracticeTopics(career.title), 
-                          generatePracticeQuestions(career.title), 
-                          generateCompanyInterviewQuestions(career.title, 'All')
-                      ]); 
-                      setPracticeTopics(topics); 
-                      setPracticeQuestionBank(qs); 
-                      const initialIqs = { 'All': iqs };
-                      setInterviewQuestionBank(initialIqs); 
-                      savePracticeData(user.id, career.id, { topics, questions: qs, interviews: initialIqs }); 
-                  } catch(e) { console.error("Failed to init practice bank", e); } 
+                  return; // Don't call AI if we have cached data
               } 
+              
+              // No cache found, trigger the massive initial fetch (Uses AI Once)
+              setIsPracticeLoading(true); 
+              try { 
+                  const data = await generatePracticeDataBatch(career.title);
+                  setPracticeTopics(data.topics || []); 
+                  setPracticeQuestionBank(data.questions || []); 
+                  setInterviewQuestionBank(data.interviews || {}); 
+                  savePracticeData(user.id, career.id, data); 
+              } catch(e) { console.error("Failed to init practice bank", e); } 
               setIsPracticeLoading(false); 
           } 
       }; 
       initPracticeBank(); 
   }, [career.id, activeTab, career.title, user.id]);
-
-  useEffect(() => { 
-      let filteredQs = practiceQuestionBank; 
-      if (selectedTopic) filteredQs = practiceQuestionBank.filter(q => q.topic === selectedTopic); 
-      if (practiceSearch && practiceTab === 'quiz') filteredQs = practiceQuestionBank.filter(q => q.question.toLowerCase().includes(practiceSearch.toLowerCase())); 
-      setPracticeQuestions(filteredQs); 
-
-      if (practiceTab === 'interview') {
-          const bankForCurrentFilter = interviewQuestionBank[companyFilter] || [];
-          let filteredIQs = bankForCurrentFilter;
-          if (practiceSearch) filteredIQs = bankForCurrentFilter.filter(q => q.question.toLowerCase().includes(practiceSearch.toLowerCase()));
-          
-          if (filteredIQs.length === 0 && companyFilter !== 'AI Challenge' && !isPracticeLoading) {
-              handlePracticeSearch();
-          } else {
-              setInterviewQuestions(filteredIQs);
-          }
-      }
-  }, [selectedTopic, companyFilter, practiceSearch, practiceQuestionBank, interviewQuestionBank, practiceTab]);
 
   const handleLoadMorePractice = async () => { 
       setIsLoadingMore(true); 
@@ -422,18 +400,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
           const updatedBank = [...practiceQuestionBank, ...newQs]; 
           setPracticeQuestionBank(updatedBank); 
           savePracticeData(user.id, career.id, { questions: updatedBank }); 
+          showToastMsg("Added new MCQs to local bank.");
       } catch(e) { console.error(e); } finally { setIsLoadingMore(false); } 
   };
 
   const handleLoadMoreInterview = async () => { 
       setIsLoadingMore(true); 
       try { 
-          const newQs = await generateCompanyInterviewQuestions(career.title, companyFilter); 
-          const existingForFilter = interviewQuestionBank[companyFilter] || [];
+          const currentMode = companyFilter === 'All' ? 'Startups' : companyFilter;
+          const newQs = await generateCompanyInterviewQuestions(career.title, currentMode); 
+          const existingForFilter = interviewQuestionBank[currentMode] || [];
           const updatedForFilter = [...existingForFilter, ...newQs];
-          const updatedBank = { ...interviewQuestionBank, [companyFilter]: updatedForFilter };
+          const updatedBank = { ...interviewQuestionBank, [currentMode]: updatedForFilter };
           setInterviewQuestionBank(updatedBank); 
           savePracticeData(user.id, career.id, { interviews: updatedBank }); 
+          showToastMsg(`Added new ${currentMode} questions to local bank.`);
       } catch(e) { console.error(e); } finally { setIsLoadingMore(false); } 
   };
 
@@ -442,7 +423,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       try { 
           const params = { topic: customGenTopic || career.title, difficulty: customGenDifficulty }; 
           const iqs = await generateCompanyInterviewQuestions(career.title, 'AI Challenge', params); 
-          setInterviewQuestions(iqs); 
+          setInterviewQuestionBank(prev => ({ ...prev, 'AI Challenge': iqs }));
+          setCompanyFilter('AI Challenge');
+          showToastMsg("Custom AI Challenge protocol generated.");
       } catch (e) { console.error(e); } finally { setIsPracticeLoading(false); } 
   };
 
@@ -553,7 +536,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       return diffDays + 1;
   };
 
-  const workDaysLeft = calculateRemainingDays(roadmap || []);
+  const workDaysLeft = roadmap?.phases ? calculateRemainingDays(roadmap.phases) : 0;
   const daysRemaining = workDaysLeft; 
 
   const getPacingStatus = () => {
@@ -569,35 +552,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const pacing = getPacingStatus();
 
   const handleProgress = (itemId: string) => { 
-      if (!roadmap) return; 
+      if (!roadmap || !roadmap.phases) return; 
       const now = Date.now(); 
       let phaseIndexToCheck = -1; 
       let wasPhaseCompleted = false; 
       
-      for (let i = 0; i < roadmap.length; i++) { 
-          if (roadmap[i].items.some(item => item.id === itemId)) { 
+      for (let i = 0; i < roadmap.phases.length; i++) { 
+          if (roadmap.phases[i].items.some(item => item.id === itemId)) { 
               phaseIndexToCheck = i; 
-              wasPhaseCompleted = roadmap[i].items.every(item => item.status === 'completed'); 
+              wasPhaseCompleted = roadmap.phases[i].items.every(item => item.status === 'completed'); 
               break; 
           } 
       } 
       
-      const newRoadmap = roadmap.map(phase => ({ 
+      const newPhases = roadmap.phases.map(phase => ({ 
           ...phase, 
           items: phase.items.map(item => item.id === itemId ? { ...item, status: item.status === 'completed' ? 'pending' : 'completed', completedAt: item.status === 'completed' ? undefined : now } as RoadmapItem : item) 
       })); 
       
+      const newRoadmap = { ...roadmap, phases: newPhases };
       setRoadmap(newRoadmap); 
       saveRoadmap(user.id, career.id, newRoadmap); 
       
       if (phaseIndexToCheck !== -1) { 
-          const phase = newRoadmap[phaseIndexToCheck];
+          const phase = newRoadmap.phases[phaseIndexToCheck];
           const isNowCompleted = phase.items.every(i => i.status === 'completed'); 
           
           if (isNowCompleted && !wasPhaseCompleted) { 
               setShowConfetti(true);
               setTimeout(() => setShowConfetti(false), 3000);
-              const currentWorkDaysLeft = calculateRemainingDays(newRoadmap);
+              const currentWorkDaysLeft = calculateRemainingDays(newRoadmap.phases);
               const currentCalendarDaysLeft = getCalendarDaysRemaining(); 
               const rawDiff = currentCalendarDaysLeft - currentWorkDaysLeft;
               const diff = rawDiff > 0 ? rawDiff - 1 : rawDiff;
@@ -610,20 +594,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const handleResetPhase = (phaseIndex: number) => { 
-    if (!roadmap) return; 
-    const newRoadmap = roadmap.map((phase, idx) => { 
+    if (!roadmap || !roadmap.phases) return; 
+    const newPhases = roadmap.phases.map((phase, idx) => { 
       if (idx === phaseIndex) { 
         return { ...phase, items: phase.items.map(item => ({ ...item, status: 'pending' as const, completedAt: undefined })) }; 
       } 
       return phase; 
     }); 
+    const newRoadmap = { ...roadmap, phases: newPhases };
     setRoadmap(newRoadmap); 
     saveRoadmap(user.id, career.id, newRoadmap); 
   };
 
   const handleResetRoadmap = () => { 
-    if (!roadmap) return; 
-    const resetMap = roadmap.map(phase => ({ ...phase, items: phase.items.map(item => ({ ...item, status: 'pending' as const, completedAt: undefined } as RoadmapItem)) })); 
+    if (!roadmap || !roadmap.phases) return; 
+    const resetPhases = roadmap.phases.map(phase => ({ ...phase, items: phase.items.map(item => ({ ...item, status: 'pending' as const, completedAt: undefined } as RoadmapItem)) })); 
+    const resetMap = { ...roadmap, phases: resetPhases };
     setRoadmap(resetMap); 
     saveRoadmap(user.id, career.id, resetMap); 
   };
@@ -631,9 +617,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const executeResetAll = () => { 
     user.activeCareers.forEach(c => { 
       const r = getRoadmap(user.id, c.careerId); 
-      if (r) { 
-        const resetR = r.map(p => ({...p, items: p.items.map(i => ({...i, status: 'pending', completedAt: undefined} as RoadmapItem))})); 
-        saveRoadmap(user.id, c.careerId, resetR); 
+      if (r && r.phases) { 
+        const resetPhases = r.phases.map(p => ({...p, items: p.items.map(i => ({...i, status: 'pending', completedAt: undefined} as RoadmapItem))})); 
+        saveRoadmap(user.id, c.careerId, { ...r, phases: resetPhases }); 
       } 
     }); 
     handleResetRoadmap(); 
@@ -687,13 +673,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const handleAdaptation = async (type: any, customTargetDate?: string, extraContext?: string) => { 
-      if (!currentCareerDetails || !roadmap) return; 
+      if (!currentCareerDetails || !roadmap || !roadmap.phases) return; 
       setShowDateStrategyModal(false); 
       setPhaseAdaptationState(null);
       setIsAdapting(true); 
       try { 
           const preservedPhases: RoadmapPhase[] = [];
-          for (const phase of roadmap) {
+          for (const phase of roadmap.phases) {
               const completedItems = phase.items.filter(i => i.status === 'completed');
               if (completedItems.length === phase.items.length) preservedPhases.push(phase);
               else if (completedItems.length > 0) { preservedPhases.push({ ...phase, items: completedItems }); break; }
@@ -709,8 +695,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           const completedCount = preservedPhases.reduce((acc, p) => acc + p.items.length, 0);
           const contextStr = `${extraContext || ''} User has completed ${completedCount} tasks. We are preserving these. Please generate the REMAINING roadmap tasks to reach the goal. Adapt the difficulty/pace according to mode: ${type}.`; 
           const startPhaseNum = preservedPhases.length + 1;
-          const newPhases = await generateRoadmap(career.title, educationYear, targetDateToUse, experienceLevel, focusAreas || '', { type, progressStr: contextStr, startingPhaseNumber: startPhaseNum }); 
-          const finalMap = [...preservedPhases, ...newPhases]; 
+          const newData = await generateRoadmap(career.title, educationYear, targetDateToUse, experienceLevel, focusAreas || '', { type, progressStr: contextStr, startingPhaseNumber: startPhaseNum }); 
+          const finalMap = { ...newData, phases: [...preservedPhases, ...newData.phases] }; 
           setRoadmap(finalMap); saveRoadmap(user.id, career.id, finalMap); 
           showToastMsg("Nova has re-architected your roadmap."); 
       } catch (e) { console.error("Adaptation failed", e); showToastMsg("AI is busy. Please try again later."); } finally { setIsAdapting(false); } 
@@ -727,8 +713,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
   
   const handleFinishQuicker = () => { 
-      if (!currentCareerDetails || !roadmap) return; 
-      const workDaysNeeded = calculateRemainingDays(roadmap);
+      if (!currentCareerDetails || !roadmap || !roadmap.phases) return; 
+      const workDaysNeeded = calculateRemainingDays(roadmap.phases);
       const newTarget = new Date(); newTarget.setHours(12, 0, 0, 0); newTarget.setDate(newTarget.getDate() + workDaysNeeded);
       const year = newTarget.getFullYear(); const month = String(newTarget.getMonth() + 1).padStart(2, '0'); const day = String(newTarget.getDate()).padStart(2, '0');
       const newDateStr = `${year}-${month}-${day}`;
@@ -754,7 +740,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setTimeout(() => { 
           const savedCareer = getCareerData(user.id, careerId); const savedRoadmap = getRoadmap(user.id, careerId); 
           if (savedCareer) { 
-              setCareer(savedCareer); setRoadmap(savedRoadmap || []); 
+              setCareer(savedCareer); setRoadmap(savedRoadmap || null); 
               const updatedUser = { ...user, currentCareerId: careerId }; setUser(updatedUser); saveUser(updatedUser); 
               showToastMsg(`Nova: Switched focus to ${savedCareer.title}`); 
           } 
@@ -841,7 +827,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <div className="p-6 md:p-8 border-b border-slate-800 bg-slate-950/50">
                       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
                            <div><h2 className="text-2xl font-bold text-white flex items-center gap-2"><GraduationCap className="h-6 w-6 text-indigo-500" /> Practice Arena</h2><p className="text-slate-400 text-sm mt-1">Master your skills in {career.title}</p></div>
-                           <div className="relative group w-full md:w-80"><Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" /><input type="text" placeholder="Search concepts, questions..." className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all text-sm" value={practiceSearch} onChange={e => setPracticeSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handlePracticeSearch()} /></div>
+                           <div className="relative group w-full md:w-80"><Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" /><input type="text" placeholder="Search local bank..." className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all text-sm" value={practiceSearch} onChange={e => setPracticeSearch(e.target.value)} /></div>
                       </div>
                       <div className="grid grid-cols-3 gap-2 p-1 bg-slate-900 rounded-xl border border-slate-800 w-full md:w-auto self-start">
                           {[{ id: 'quiz', icon: BrainCircuit, label: 'Questions' }, { id: 'interview', icon: MessageSquare, label: 'Interview' }, { id: 'simulation', icon: PlayCircle, label: 'Simulation' }].map(tab => (
@@ -861,55 +847,61 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           <>
                               {practiceTab === 'quiz' && (
                                   <div className="animate-fade-in space-y-8">
-                                      <div><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Suggested Topics</h3><div className="flex flex-wrap gap-2"><button onClick={() => setSelectedTopic(null)} className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${!selectedTopic ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}>General</button>{practiceTopics.map(t => <button key={t} onClick={() => setSelectedTopic(t)} className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedTopic === t ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}>{t}</button>)}</div></div>
+                                      <div><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Suggested Topics</h3><div className="flex flex-wrap gap-2"><button onClick={() => setSelectedTopic(null)} className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${!selectedTopic ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}>All Topics</button>{practiceTopics.map(t => <button key={t} onClick={() => setSelectedTopic(t)} className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedTopic === t ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}>{t}</button>)}</div></div>
                                       <div className="space-y-6">
-                                          {practiceQuestions?.length > 0 ? practiceQuestions.map((q, qIdx) => (
+                                          {filteredPracticeQuestions?.length > 0 ? filteredPracticeQuestions.map((q, qIdx) => (
                                               <PracticeQuestionCard key={q.id || qIdx} question={q} index={qIdx} />
-                                          )) : <div className="text-center py-10 text-slate-500">No questions available for this filter.</div>}
+                                          )) : <div className="text-center py-10 text-slate-500">No matching questions in local bank. Click below to generate more.</div>}
                                       </div>
-                                      <button onClick={handleLoadMorePractice} disabled={isLoadingMore} className="w-full py-3 mt-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">{isLoadingMore ? <RefreshCw className="h-4 w-4 animate-spin"/> : <PlusCircle className="h-4 w-4"/>} Load More Questions</button>
+                                      <button onClick={handleLoadMorePractice} disabled={isLoadingMore} className="w-full py-4 mt-6 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                                          {isLoadingMore ? <RefreshCw className="h-5 w-5 animate-spin"/> : <Sparkles className="h-5 w-5"/>} 
+                                          {isLoadingMore ? 'Architecting...' : 'Request New AI Questions'}
+                                      </button>
                                   </div>
                               )}
 
                               {practiceTab === 'interview' && (
                                   <div className="animate-fade-in space-y-8">
-                                      <div><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Filter by Company / Mode</h3><div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide">{['All', 'Google', 'Amazon', 'Microsoft', 'Netflix', 'Meta', 'Startups', 'Aptitude', 'AI Challenge'].map(mode => (<button key={mode} onClick={() => setCompanyFilter(mode)} className={`px-4 py-2 rounded-full text-xs font-bold transition-all border whitespace-nowrap flex items-center gap-2 ${companyFilter === mode ? mode === 'AI Challenge' ? 'bg-fuchsia-600 text-white border-fuchsia-600 shadow-lg' : 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>{mode === 'AI Challenge' && <Sparkles className="h-3 w-3" />}{mode === 'Aptitude' && <Cpu className="h-3 w-3" />}{mode}</button>))}</div></div>
+                                      <div><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Target Companies</h3><div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide">{(['All', ...Object.keys(interviewQuestionBank).filter(k => k !== 'AI Challenge'), 'AI Challenge']).map(mode => (<button key={mode} onClick={() => setCompanyFilter(mode)} className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all border whitespace-nowrap flex items-center gap-2 ${companyFilter === mode ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-500 hover:bg-slate-800'}`}>{mode === 'AI Challenge' && <Sparkles className="h-3 w-3" />}{mode}</button>))}</div></div>
                                       {companyFilter === 'AI Challenge' && (
-                                          <div className="bg-slate-950 border border-fuchsia-500/30 rounded-2xl p-6 animate-fade-in relative overflow-hidden">
+                                          <div className="bg-slate-950 border border-fuchsia-500/30 rounded-2xl p-6 animate-fade-in relative overflow-hidden mb-8">
                                               <div className="absolute top-0 right-0 w-64 h-64 bg-fuchsia-500/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
-                                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Sparkles className="h-5 w-5 text-fuchsia-500" /> Custom AI Generator</h3>
-                                              <div className="grid md:grid-cols-3 gap-4 mb-4"><div className="md:col-span-2"><label className="text-xs text-slate-500 block mb-1 uppercase font-bold">Topic</label><input type="text" placeholder={`e.g. Advanced ${career.title} concepts`} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-fuchsia-500 outline-none" value={customGenTopic} onChange={e => setCustomGenTopic(e.target.value)} /></div><div><label className="text-xs text-slate-500 block mb-1 uppercase font-bold">Difficulty</label><select className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-fuchsia-500 outline-none" value={customGenDifficulty} onChange={e => setCustomGenDifficulty(e.target.value)}><option>Easy</option><option>Medium</option><option>Hard</option><option>Expert</option></select></div></div>
-                                              <button onClick={handleAICustomChallenge} className="w-full py-3 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-fuchsia-900/20">Generate Challenge Questions</button>
+                                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Sparkles className="h-5 w-5 text-fuchsia-500" /> Targeted AI Challenge</h3>
+                                              <div className="grid md:grid-cols-3 gap-4 mb-4"><div className="md:col-span-2"><label className="text-xs text-slate-500 block mb-1 uppercase font-bold">Concept Focus</label><input type="text" placeholder={`e.g. Advanced System Design in ${career.title}`} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-fuchsia-500 outline-none" value={customGenTopic} onChange={e => setCustomGenTopic(e.target.value)} /></div><div><label className="text-xs text-slate-500 block mb-1 uppercase font-bold">Severity</label><select className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-fuchsia-500 outline-none" value={customGenDifficulty} onChange={e => setCustomGenDifficulty(e.target.value)}><option>Easy</option><option>Medium</option><option>Hard</option><option>Expert</option></select></div></div>
+                                              <button onClick={handleAICustomChallenge} className="w-full py-4 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-fuchsia-900/20 active:scale-95">Initiate Custom Protocol</button>
                                           </div>
                                       )}
                                       <div className="grid md:grid-cols-2 gap-4">
-                                          {interviewQuestions?.length > 0 ? interviewQuestions.map((q, i) => (
-                                              <div key={q.id || i} className="bg-slate-950 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between hover:border-indigo-500/50 transition-colors group">
-                                                  <div className="mb-4">
-                                                      <div className="flex justify-between items-start mb-4"><div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${q.company?.includes('Aptitude') ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : q.company?.includes('AI Challenge') ? 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20' : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'}`}>{q.company || 'General'}</div></div>
-                                                      <h4 className="font-bold text-white mb-2">{q.question}</h4>
-                                                      {q.explanation && visibleAnswers.has(q.id) && <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-1"><Info className="h-3 w-3" /> Enhanced Explanation Available</div>}
+                                          {filteredInterviewQuestions?.length > 0 ? filteredInterviewQuestions.map((q, i) => (
+                                              <div key={q.id || i} className="bg-slate-950 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between hover:border-indigo-500/50 transition-colors group relative overflow-hidden">
+                                                  <div className="mb-4 relative z-10">
+                                                      <div className="flex justify-between items-start mb-4"><div className={`px-2 py-1 rounded-[6px] text-[9px] font-black uppercase tracking-widest border bg-indigo-500/10 text-indigo-400 border-indigo-500/20`}>{q.company || 'General'}</div></div>
+                                                      <h4 className="font-bold text-white mb-2 leading-relaxed">{q.question}</h4>
+                                                      {q.explanation && visibleAnswers.has(q.id) && <div className="text-[10px] text-emerald-500 font-bold flex items-center gap-1 mt-1 uppercase tracking-tighter"><CheckCircle2 className="h-3 w-3" /> Technical Analysis Ready</div>}
                                                   </div>
-                                                  <div>{visibleAnswers.has(q.id) ? (
-                                                      <div className="bg-slate-900 p-4 rounded-xl text-sm text-slate-300 border border-slate-800 animate-fade-in space-y-3">
-                                                          <div><span className="font-bold text-indigo-400 block mb-1 uppercase text-[10px] tracking-widest">Model Answer</span>{q.answer}</div>
+                                                  <div className="relative z-10">{visibleAnswers.has(q.id) ? (
+                                                      <div className="bg-slate-900 p-5 rounded-xl text-sm text-slate-300 border border-slate-800 animate-fade-in space-y-4">
+                                                          <div><span className="font-black text-indigo-400 block mb-2 uppercase text-[10px] tracking-widest">Master Answer</span><p className="leading-relaxed">{q.answer}</p></div>
                                                           {q.explanation && (
-                                                              <div className="pt-3 border-t border-white/5">
-                                                                  <span className="font-bold text-emerald-400 block mb-1 uppercase text-[10px] tracking-widest">Deep Context</span>
-                                                                  <p className="text-xs leading-relaxed opacity-80">{q.explanation}</p>
+                                                              <div className="pt-4 border-t border-white/5">
+                                                                  <span className="font-black text-emerald-400 block mb-2 uppercase text-[10px] tracking-widest">Industry Context</span>
+                                                                  <p className="text-xs leading-relaxed opacity-80 italic">{q.explanation}</p>
                                                               </div>
                                                           )}
                                                       </div>
                                                   ) : (
-                                                      <button onClick={() => toggleAnswerReveal(q.id)} className="w-full py-3 border border-slate-800 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800 transition-all text-sm font-medium flex items-center justify-center gap-2">
-                                                          <Eye className="h-4 w-4" /> Reveal Answer
+                                                      <button onClick={() => toggleAnswerReveal(q.id)} className="w-full py-3.5 border border-slate-800 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800 transition-all text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                                                          <Eye className="h-4 w-4" /> Reveal Protocol
                                                       </button>
                                                   )}</div>
                                               </div>
-                                          )) : <div className="col-span-2 text-center py-10 text-slate-500">No questions found. Try changing filters or loading more.</div>}
+                                          )) : <div className="col-span-2 text-center py-10 text-slate-500">No matching interview questions in local bank.</div>}
                                       </div>
                                       {companyFilter !== 'AI Challenge' && (
-                                          <button onClick={handleLoadMoreInterview} disabled={isLoadingMore} className="w-full py-3 mt-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">{isLoadingMore ? <RefreshCw className="h-4 w-4 animate-spin"/> : <PlusCircle className="h-4 w-4"/>} Load More (with Explanations)</button>
+                                          <button onClick={handleLoadMoreInterview} disabled={isLoadingMore} className="w-full py-4 mt-8 bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                                              {isLoadingMore ? <RefreshCw className="h-5 w-5 animate-spin"/> : <PlusCircle className="h-5 w-5"/>} 
+                                              {isLoadingMore ? 'Processing...' : 'Architect More Interview Data'}
+                                          </button>
                                       )}
                                   </div>
                               )}
@@ -919,17 +911,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                     {!simulationScenario ? (
                                         <div className="text-center py-20">
                                             <div className="w-20 h-20 bg-slate-800 rounded-3xl mx-auto mb-6 flex items-center justify-center"><PlayCircle className="h-10 w-10 text-indigo-500" /></div>
-                                            <h3 className="text-xl font-bold text-white mb-2">Simulation Arena</h3>
-                                            <p className="text-slate-400 mb-6">Test your decision-making in real-world job scenarios.</p>
-                                            <button onClick={handleSimulationSearch} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20">Start New Scenario</button>
+                                            <h3 className="text-xl font-bold text-white mb-2">Tactical Simulation</h3>
+                                            <p className="text-slate-400 mb-8">Test your operational decision-making in real-world scenarios.</p>
+                                            <button onClick={handleSimulationSearch} className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest rounded-xl shadow-lg shadow-indigo-900/20 active:scale-95 transition-all">Initiate Simulation</button>
                                         </div>
                                     ) : (
                                       <div className="bg-slate-950 border border-indigo-500/30 rounded-3xl overflow-hidden shadow-2xl relative">
                                           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
                                           <div className="p-8">
-                                              <div className="flex items-center gap-3 mb-6"><div className="p-3 bg-indigo-500/20 rounded-2xl text-indigo-400"><PlayCircle className="h-8 w-8" /></div><div><h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Simulation Arena</h3><h2 className="text-xl font-bold text-white">Scenario Challenge</h2></div></div>
-                                              <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 mb-8 italic text-slate-300 leading-relaxed">"{simulationScenario.scenario}"</div>
-                                              <h3 className="text-lg font-bold text-white mb-6">{simulationScenario.question}</h3>
+                                              <div className="flex items-center gap-3 mb-6"><div className="p-3 bg-indigo-500/20 rounded-2xl text-indigo-400"><PlayCircle className="h-8 w-8" /></div><div><h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Operational Arena</h3><h2 className="text-xl font-bold text-white">Scenario Update</h2></div></div>
+                                              <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 mb-8 italic text-slate-300 leading-relaxed font-medium">"{simulationScenario.scenario}"</div>
+                                              <h3 className="text-lg font-bold text-white mb-6 leading-tight">{simulationScenario.question}</h3>
                                               <div className="space-y-3">
                                                   {simulationScenario.options?.map((opt, idx) => {
                                                       const isSelected = simAnswer === idx;
@@ -941,16 +933,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                                           else if (isSelected) btnClass += "bg-red-500/20 border-red-500 text-white ring-1 ring-red-500/50";
                                                           else btnClass += "bg-slate-900 border-slate-800 text-slate-500 opacity-40 grayscale";
                                                       } else { btnClass += "bg-slate-900 border-slate-700 text-slate-200 hover:border-indigo-500 hover:bg-slate-800 hover:shadow-lg hover:shadow-indigo-500/10"; }
-                                                      return (<button key={idx} onClick={() => handleSimAnswer(idx)} disabled={simAnswer !== null} className={btnClass}><span className="font-medium pr-8">{opt}</span>{showResult && isCorrect && <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0" />}{showResult && isSelected && !isCorrect && <AlertTriangle className="h-6 w-6 text-red-400 shrink-0" />}</button>);
+                                                      return (<button key={idx} onClick={() => handleSimAnswer(idx)} disabled={simAnswer !== null} className={btnClass}><span className="font-bold text-sm md:text-base pr-8">{opt}</span>{showResult && isCorrect && <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0" />}{showResult && isSelected && !isCorrect && <AlertTriangle className="h-6 w-6 text-red-400 shrink-0" />}</button>);
                                                   })}
                                               </div>
                                               {simAnswer !== null && (
                                                   <div className={`mt-8 p-6 rounded-2xl border animate-fade-in ${simAnswer === Number(simulationScenario.correctIndex) ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-red-900/10 border-red-500/20'}`}>
                                                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 border-b border-white/10 pb-4">
-                                                          <div className="flex items-center gap-3">{simAnswer === Number(simulationScenario.correctIndex) ? (<><div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-400"><CheckCircle2 className="h-6 w-6" /></div><div><h4 className="text-emerald-400 font-bold text-lg">Excellent Decision</h4><p className="text-slate-400 text-xs">+10 XP Awarded</p></div></>) : (<><div className="p-2 bg-red-500/20 rounded-lg text-red-400"><AlertTriangle className="h-6 w-6" /></div><div><h4 className="text-red-400 font-bold text-lg">Not Quite Optimal</h4><p className="text-slate-400 text-xs">Review analysis below</p></div></>)}</div>
-                                                          <button onClick={handleSimulationSearch} className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-all border border-slate-700 flex items-center gap-2 text-sm whitespace-nowrap shadow-lg">Next Scenario <ArrowRight className="h-4 w-4" /></button>
+                                                          <div className="flex items-center gap-3">{simAnswer === Number(simulationScenario.correctIndex) ? (<><div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-400"><CheckCircle2 className="h-6 w-6" /></div><div><h4 className="text-emerald-400 font-black text-lg uppercase tracking-tight">Optimal Choice</h4><p className="text-slate-400 text-xs font-bold">+10 XP Synchronized</p></div></>) : (<><div className="p-2 bg-red-500/20 rounded-lg text-red-400"><AlertTriangle className="h-6 w-6" /></div><div><h4 className="text-red-400 font-black text-lg uppercase tracking-tight">Incomplete Logic</h4><p className="text-slate-400 text-xs font-bold">Review debriefing below</p></div></>)}</div>
+                                                          <button onClick={handleSimulationSearch} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-black uppercase tracking-widest rounded-xl transition-all border border-slate-700 flex items-center gap-2 text-xs shadow-lg active:scale-95">Next Deployment <ArrowRight className="h-4 w-4" /></button>
                                                       </div>
-                                                      <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800"><h4 className="text-indigo-400 text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-2"><Zap className="h-3 w-3" /> Consequence Analysis</h4><p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{simulationScenario.explanation}</p></div>
+                                                      <div className="bg-slate-950/50 p-5 rounded-xl border border-slate-800"><h4 className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em] mb-3 flex items-center gap-2"><Zap className="h-3 w-3" /> Nova Strategic Analysis</h4><p className="text-slate-300 text-sm leading-relaxed font-medium">{simulationScenario.explanation}</p></div>
                                                   </div>
                                               )}
                                           </div>
@@ -994,7 +986,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6"><h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2"><Palette className="h-5 w-5 text-indigo-400" /> Accent Color</h3><div className="space-y-4"><div className="p-4 bg-slate-950 rounded-xl border border-slate-800"><div className="text-slate-400 text-sm mb-3">Choose your vibe</div><div className="flex flex-wrap gap-3">{(['indigo', 'emerald', 'rose', 'amber', 'cyan'] as const).map(color => (<button key={color} onClick={() => setAccentColor(color)} className={`w-10 h-10 rounded-full border-2 transition-all flex items-center justify-center ${user.theme === color ? 'border-white scale-110' : 'border-transparent hover:scale-105'}`} style={{backgroundColor: color === 'indigo' ? '#6366f1' : color === 'emerald' ? '#10b981' : color === 'rose' ? '#f43f5e' : color === 'amber' ? '#f59e0b' : '#06b6d4'}}>{user.theme === color && <CheckCircle2 className="h-5 w-5 text-white drop-shadow-md" />}</button>))}</div></div><div className="flex items-center justify-between p-4 bg-slate-950 rounded-xl border border-slate-800"><div className="flex items-center gap-3 text-slate-300"><Mail className="h-5 w-5 text-slate-500" /> Email</div><span className="text-slate-500 font-mono text-sm">{user.id.includes('@') ? user.id.replace(/(.{2})(.*)(@.*)/, "$1***$3") : user.id}</span></div></div></div>
                       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6"><h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-red-400" /> Danger Zone</h3><div className="space-y-4"><button onClick={() => setConfirmAction({type: 'reset_all', inputValue: ''})} className="w-full text-left p-4 bg-slate-950 hover:bg-red-900/10 border border-slate-800 hover:border-red-500/30 rounded-xl text-slate-400 hover:text-red-400 transition-all flex items-center justify-between group"><span>Reset All Progress</span><RotateCcw className="h-5 w-5 group-hover:rotate-180 transition-transform" /></button><button onClick={() => setConfirmAction({type: 'delete_account', inputValue: ''})} className="w-full text-left p-4 bg-slate-950 hover:bg-red-900/10 border border-slate-800 hover:border-red-500/30 rounded-xl text-slate-400 hover:text-red-400 transition-all flex items-center justify-between group"><span>Delete Account</span><Trash2 className="h-5 w-5" /></button></div></div>
                   </div>
-                  <div className="text-center pt-8"><button onClick={onLogout} className="text-slate-500 hover:text-white flex items-center gap-2 mx-auto transition-colors"><LogOut className="h-5 w-5" /> Log Out</button><div className="mt-8 text-xs text-slate-600">PathFinder AI v1.0.0 • Developed by Hameed Afsar K M</div><button onClick={() => setShowFeedbackModal(true)} className="mt-4 text-xs text-indigo-500 hover:text-indigo-400">Send Feedback</button></div>
+                  <div className="text-center pt-8"><button onClick={onLogout} className="text-slate-500 hover:text-white flex items-center gap-2 mx-auto transition-colors"><LogOut className="h-5 w-5" /> Log Out</button><div className="mt-8 text-xs text-slate-600">PathFindr AI v1.0.0 • Developed by Hameed Afsar K M</div><button onClick={() => setShowFeedbackModal(true)} className="mt-4 text-xs text-indigo-500 hover:text-indigo-400">Send Feedback</button></div>
               </div>
           );
       default:

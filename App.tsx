@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Auth } from './components/Auth';
 import { Onboarding } from './components/Onboarding';
 import { Dashboard } from './components/Dashboard';
-import { UserProfile, CareerOption, RoadmapPhase } from './types';
+import { UserProfile, CareerOption, RoadmapPhase, RoadmapData } from './types';
 import { 
     getCurrentUserId, 
     getUsers, 
@@ -55,7 +55,7 @@ const App: React.FC = () => {
   const [showSplash, setShowSplash] = useState(true);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [career, setCareer] = useState<CareerOption | null>(null);
-  const [roadmap, setRoadmap] = useState<RoadmapPhase[] | null>(null);
+  const [roadmap, setRoadmap] = useState<RoadmapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAddingCareer, setIsAddingCareer] = useState(false);
   const [addCareerMode, setAddCareerMode] = useState<'analysis' | 'search' | null>(null);
@@ -65,7 +65,7 @@ const App: React.FC = () => {
       const savedRoadmap = getRoadmap(userId, careerId);
       
       setCareer(savedCareer);
-      setRoadmap(savedRoadmap || []);
+      setRoadmap(savedRoadmap || null);
   };
 
   useEffect(() => {
@@ -127,7 +127,6 @@ const App: React.FC = () => {
     saveCareerData(user.id, selectedCareer.id, selectedCareer);
 
     try {
-        // Parallel fetch for Roadmap and initial Practice Batch to minimize wait time
         const [generatedRoadmap, practiceData] = await Promise.all([
             generateRoadmap(selectedCareer.title, eduYear, targetDate, expLevel, focusAreas),
             generatePracticeDataBatch(selectedCareer.title)
@@ -138,7 +137,7 @@ const App: React.FC = () => {
         savePracticeData(user.id, selectedCareer.id, practiceData);
     } catch (e) {
         console.error("Context generation failed", e);
-        setRoadmap([]);
+        setRoadmap({ phases: [], recommendedCertificates: [] });
     }
   };
 
@@ -212,6 +211,14 @@ const App: React.FC = () => {
   }
 
   if (!career) return <Onboarding onComplete={handleOnboardingComplete} isNewUser={false} />;
+
+  const handleUpdateRoadmap = (updatedPhases: RoadmapPhase[]) => {
+      if (roadmap) {
+          const newData = { ...roadmap, phases: updatedPhases };
+          setRoadmap(newData);
+          saveRoadmap(user.id, career.id, newData);
+      }
+  };
 
   return (
     <Dashboard 

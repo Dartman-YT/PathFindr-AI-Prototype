@@ -1,4 +1,4 @@
-import { UserProfile, CareerOption, RoadmapPhase, NewsItem, DailyQuizItem, PracticeQuestion, InterviewQuestion } from '../types';
+import { UserProfile, CareerOption, RoadmapPhase, NewsItem, DailyQuizItem, PracticeQuestion, InterviewQuestion, RoadmapData } from '../types';
 
 const KEYS = {
   USERS: 'pathfinder_users',
@@ -53,13 +53,19 @@ export const getCareerData = (userId: string, careerId: string): CareerOption | 
   return str ? JSON.parse(str) : null;
 };
 
-export const saveRoadmap = (userId: string, careerId: string, roadmap: RoadmapPhase[]) => {
+export const saveRoadmap = (userId: string, careerId: string, roadmap: RoadmapData) => {
   localStorage.setItem(`${KEYS.ROADMAP}${userId}_${careerId}`, JSON.stringify(roadmap));
 };
 
-export const getRoadmap = (userId: string, careerId: string): RoadmapPhase[] | null => {
+export const getRoadmap = (userId: string, careerId: string): RoadmapData | null => {
   const str = localStorage.getItem(`${KEYS.ROADMAP}${userId}_${careerId}`);
-  return str ? JSON.parse(str) : null;
+  if (!str) return null;
+  const data = JSON.parse(str);
+  // Migrate legacy data if it's just an array of phases
+  if (Array.isArray(data)) {
+    return { phases: data, recommendedCertificates: [] };
+  }
+  return data;
 };
 
 export const saveNewsCache = (userId: string, careerId: string, news: NewsItem[]) => {

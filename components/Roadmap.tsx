@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { RoadmapPhase, UserProfile, RoadmapItem } from '../types';
+import { RoadmapPhase, UserProfile, RoadmapItem, RoadmapData } from '../types';
 import { Subscription } from './Subscription';
-import { CheckCircle2, Circle, ExternalLink, RefreshCw, Briefcase, Award, Code, Zap, Clock, ChevronDown, ChevronUp, Star, AlertTriangle, CheckCircle, RotateCcw, Lock, Filter, Search, Info, Check, Pencil, Compass, Youtube, PlayCircle, TrendingUp, TrendingDown, Target as TargetIcon, Boxes, FileBadge, GraduationCap } from 'lucide-react';
+import { CheckCircle2, Circle, ExternalLink, RefreshCw, Briefcase, Award, Code, Zap, Clock, ChevronDown, ChevronUp, Star, AlertTriangle, CheckCircle, RotateCcw, Lock, Filter, Search, Info, Check, Pencil, Compass, Youtube, PlayCircle, TrendingUp, TrendingDown, Target as TargetIcon, Boxes, FileBadge, GraduationCap, Sparkles } from 'lucide-react';
 
 interface PacingStatus {
     status: 'ahead' | 'behind' | 'on-track' | 'critical';
@@ -10,7 +10,7 @@ interface PacingStatus {
 }
 
 interface RoadmapProps {
-  roadmap: RoadmapPhase[] | null;
+  roadmap: RoadmapData | null;
   user: UserProfile;
   onSubscribe: (plan: 'monthly' | 'yearly') => void;
   onUpdateProgress: (itemId: string) => void;
@@ -46,10 +46,8 @@ export const Roadmap: React.FC<RoadmapProps> = ({
   
   const [expandedLearnMoreItems, setExpandedLearnMoreItems] = useState<Set<string>>(new Set());
 
-  const flatRoadmapItems = useMemo(() => {
-      if (!roadmap) return [];
-      return roadmap.flatMap(phase => phase.items || []);
-  }, [roadmap]);
+  const phases = roadmap?.phases || [];
+  const flatRoadmapItems = useMemo(() => phases.flatMap(phase => phase.items || []), [phases]);
 
   const itemStartDays = useMemo(() => {
     const map: Record<string, number> = {};
@@ -74,7 +72,7 @@ export const Roadmap: React.FC<RoadmapProps> = ({
         let firstPendingPhase = 0;
         let foundPending = false;
 
-        roadmap.forEach((phase, idx) => {
+        phases.forEach((phase, idx) => {
             const pItems = phase.items || [];
             totalItems += pItems.length;
             const cCount = pItems.filter(i => i.status === 'completed').length;
@@ -89,7 +87,7 @@ export const Roadmap: React.FC<RoadmapProps> = ({
         setExpandedPhase(firstPendingPhase);
         setCompletionPercentage(totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0);
     }
-  }, [roadmap, isLoading]);
+  }, [roadmap, isLoading, phases]);
 
   const togglePhase = (index: number) => {
       setExpandedPhase(expandedPhase === index ? null : index);
@@ -157,7 +155,6 @@ export const Roadmap: React.FC<RoadmapProps> = ({
   const getItemIcon = (type: string) => {
       switch(type) {
           case 'project': return <Boxes className="h-3.5 w-3.5" />;
-          case 'certificate': return <FileBadge className="h-3.5 w-3.5" />;
           case 'internship': return <Briefcase className="h-3.5 w-3.5" />;
           default: return <GraduationCap className="h-3.5 w-3.5" />;
       }
@@ -268,14 +265,47 @@ export const Roadmap: React.FC<RoadmapProps> = ({
             </div>
         </div>
 
+        {/* Global Recommendations Section */}
+        {roadmap.recommendedCertificates && roadmap.recommendedCertificates.length > 0 && (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 overflow-hidden relative group">
+                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <Award className="h-20 w-20 text-indigo-400" />
+                </div>
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2.5 bg-indigo-500/10 rounded-xl text-indigo-400">
+                        <Award className="h-6 w-6" />
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-black text-white leading-none">Recommended Credentials</h3>
+                        <p className="text-xs text-slate-500 mt-1 font-bold uppercase tracking-wider">Expert-curated global certifications</p>
+                    </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {roadmap.recommendedCertificates.map((cert, idx) => (
+                        <a key={idx} href={cert.url} target="_blank" rel="noreferrer" className="bg-slate-950/50 border border-slate-800 p-4 rounded-2xl hover:border-indigo-500/50 hover:bg-slate-900 transition-all group/card flex flex-col justify-between">
+                            <div>
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-1 rounded-md">{cert.provider}</span>
+                                    <ExternalLink className="h-3 w-3 text-slate-700 group-hover/card:text-indigo-400 transition-colors" />
+                                </div>
+                                <h4 className="font-bold text-white text-sm group-hover/card:text-indigo-200 transition-colors">{cert.title}</h4>
+                                <p className="text-[11px] text-slate-400 mt-2 line-clamp-2 italic">"{cert.relevance}"</p>
+                            </div>
+                        </a>
+                    ))}
+                </div>
+            </div>
+        )}
+
         <div className="space-y-4">
-            {roadmap.map((phase, pIndex) => {
+            {phases.map((phase, pIndex) => {
                 const isExpanded = expandedPhase === pIndex || activeCategory !== 'all' || searchQuery !== '';
                 const phaseItems = phase.items || [];
                 const completedCount = phaseItems.filter(i => i.status === 'completed').length;
                 const totalCount = phaseItems.length;
                 const isPhaseDone = totalCount > 0 && completedCount === totalCount;
                 const visibleItems = phaseItems.filter(filterItem);
+                const isLastPhase = pIndex === phases.length - 1;
                 
                 if (visibleItems.length === 0 && (activeCategory !== 'all' || searchQuery !== '')) return null;
 
@@ -298,31 +328,39 @@ export const Roadmap: React.FC<RoadmapProps> = ({
 
                         {isExpanded && (
                             <div className="border-t border-slate-800 bg-slate-950/40 p-4 space-y-3">
-                                {visibleItems.map((item) => {
+                                {visibleItems.map((item, iIndex) => {
                                     const showDetails = expandedLearnMoreItems.has(item.id);
                                     const locked = isLocked(item);
                                     const done = item.status === 'completed';
                                     const startDay = itemStartDays[item.id] || 1;
                                     const dayLabel = `Day ${startDay}`;
+                                    const isFinalItemOfPath = isLastPhase && iIndex === visibleItems.length - 1;
 
                                     return (
-                                        <div key={item.id} className={`rounded-2xl border transition-all overflow-hidden ${done ? 'bg-slate-900/40 border-slate-800/40' : locked ? 'bg-slate-950 border-slate-800/50 grayscale' : 'bg-slate-800/40 border-slate-700/60 hover:border-indigo-500/40 hover:bg-slate-800/60'}`}>
+                                        <div key={item.id} className={`rounded-2xl border transition-all overflow-hidden ${
+                                            isFinalItemOfPath ? 'border-amber-500/30 bg-amber-500/5 shadow-lg shadow-amber-900/10 ring-1 ring-amber-500/20' : 
+                                            done ? 'bg-slate-900/40 border-slate-800/40' : 
+                                            locked ? 'bg-slate-950 border-slate-800/50 grayscale' : 
+                                            'bg-slate-800/40 border-slate-700/60 hover:border-indigo-500/40 hover:bg-slate-800/60'
+                                        }`}>
                                             <div className="flex items-center gap-4 p-4">
                                                 <button onClick={() => !locked && handleTaskClick(item)} disabled={locked || done} className={`shrink-0 transition-all ${locked ? 'cursor-not-allowed opacity-30' : 'hover:scale-110 active:scale-95'}`}>
                                                     {done ? <div className="p-1 bg-emerald-500/20 rounded-lg"><CheckCircle2 className="h-6 w-6 text-emerald-400" /></div> : locked ? <Lock className="h-6 w-6 text-slate-700" /> : <Circle className="h-6 w-6 text-slate-500" />}
                                                 </button>
                                                 <div className={`flex-1 min-w-0 flex flex-col gap-1 ${locked ? 'opacity-40' : 'cursor-pointer'}`} onClick={() => !locked && handleTaskClick(item)}>
                                                     <div className="flex items-center flex-wrap gap-2">
-                                                        <span className="text-[9px] font-black text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-lg border border-indigo-500/20 uppercase tracking-widest shrink-0 shadow-sm">{dayLabel}</span>
+                                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg border uppercase tracking-widest shrink-0 shadow-sm ${isFinalItemOfPath ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'}`}>
+                                                            {isFinalItemOfPath ? 'FINAL DESTINATION' : dayLabel}
+                                                        </span>
                                                         <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border ${
+                                                            isFinalItemOfPath ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
                                                             item.type === 'project' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
-                                                            item.type === 'certificate' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' :
                                                             item.type === 'internship' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
                                                             'bg-slate-500/10 border-slate-500/20 text-slate-400'
                                                         }`}>
-                                                            {getItemIcon(item.type)} {item.type}
+                                                            {isFinalItemOfPath ? <Sparkles className="h-3.5 w-3.5" /> : getItemIcon(item.type)} {item.type}
                                                         </span>
-                                                        <span className={`font-bold text-sm md:text-base tracking-tight leading-none ${done ? 'line-through text-slate-500' : 'text-slate-100'}`}>
+                                                        <span className={`font-bold text-sm md:text-base tracking-tight leading-none ${done ? 'line-through text-slate-500' : isFinalItemOfPath ? 'text-amber-100' : 'text-slate-100'}`}>
                                                             {item.title}
                                                         </span>
                                                     </div>
@@ -331,21 +369,35 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                                                     </p>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <button onClick={(e) => toggleLearnMore(e, item)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${showDetails ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-600'}`}>
+                                                    <button onClick={(e) => toggleLearnMore(e, item)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                                                        showDetails ? (isFinalItemOfPath ? 'bg-amber-600 border-amber-600 text-white' : 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-900/20') : 
+                                                        'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-600'}`}>
                                                         {showDetails ? 'Close' : 'View'}
                                                     </button>
                                                 </div>
                                             </div>
                                             {showDetails && (
-                                                <div className="border-t border-slate-800 bg-slate-900/20 p-5 space-y-6 animate-fade-in text-sm relative">
+                                                <div className={`border-t border-slate-800 bg-slate-900/20 p-5 space-y-6 animate-fade-in text-sm relative ${isFinalItemOfPath ? 'bg-amber-950/5' : ''}`}>
                                                     {locked && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 font-bold text-xs flex items-center gap-3 mb-4 shadow-inner"><Lock className="h-4 w-4" /> Prerequisite required. Complete previous day.</div>}
                                                     
+                                                    {isFinalItemOfPath && (
+                                                        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-4 shadow-inner mb-4">
+                                                            <div className="p-2 bg-amber-500/20 rounded-xl text-amber-400">
+                                                                <Sparkles className="h-5 w-5" />
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="font-black text-amber-400 text-xs uppercase tracking-widest mb-1">Capstone Protocol</h4>
+                                                                <p className="text-amber-200/70 text-xs leading-relaxed">This final project integrates all previously mastered domains. Successful deployment confirms your readiness for industry entry.</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     {item.explanation && (
                                                         <div className="relative">
                                                             <div className="flex items-center gap-2 mb-3">
-                                                                <div className="h-px flex-1 bg-gradient-to-r from-indigo-500/50 to-transparent"></div>
-                                                                <h4 className="font-black text-indigo-400 uppercase tracking-widest text-[10px]">Architect's Briefing</h4>
-                                                                <div className="h-px flex-1 bg-gradient-to-l from-indigo-500/50 to-transparent"></div>
+                                                                <div className={`h-px flex-1 bg-gradient-to-r from-${isFinalItemOfPath ? 'amber' : 'indigo'}-500/50 to-transparent`}></div>
+                                                                <h4 className={`font-black text-${isFinalItemOfPath ? 'amber' : 'indigo'}-400 uppercase tracking-widest text-[10px]`}>Architect's Briefing</h4>
+                                                                <div className={`h-px flex-1 bg-gradient-to-l from-${isFinalItemOfPath ? 'amber' : 'indigo'}-500/50 to-transparent`}></div>
                                                             </div>
                                                             <p className="text-slate-300 leading-relaxed font-medium bg-slate-950/30 p-4 rounded-2xl border border-white/5 shadow-inner">
                                                                 {item.explanation}
