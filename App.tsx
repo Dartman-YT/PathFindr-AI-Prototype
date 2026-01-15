@@ -39,7 +39,7 @@ const SplashScreen = () => (
         </div>
       </div>
       <h1 className="text-5xl md:text-7xl font-black text-white mb-2 tracking-tighter text-center">
-        PathFindr<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-fuchsia-400">AI</span>
+        PathFindr<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-fuchsia-400">.AI</span>
       </h1>
       <p className="text-slate-400 text-sm md:text-base tracking-widest uppercase font-medium mb-10 opacity-80">
         Navigate Your Future

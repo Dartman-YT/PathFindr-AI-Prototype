@@ -51,7 +51,7 @@ export const analyzeInterests = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json"
@@ -143,7 +143,7 @@ export const generateRoadmap = async (
   try {
     if (!ai) throw new Error("AI missing");
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
@@ -188,7 +188,7 @@ export const generatePracticeDataBatch = async (careerTitle: string): Promise<an
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
@@ -221,20 +221,51 @@ export const fetchTechNews = async (topic: string): Promise<NewsItem[]> => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Find 5 recent news headlines about "${topic}".`,
+      contents: `Find exactly 10 high-quality, professional news headlines about "${topic}" from industry leaders. Focus on breakthroughs, market shifts, and expert insights.`,
       config: { tools: [{ googleSearch: {} }] }
     });
-    const ground = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    return ground
-      .filter((c: any) => c.web)
-      .map((c: any) => ({ 
-        title: c.web.title, 
-        url: c.web.uri, 
-        source: new URL(c.web.uri).hostname, 
-        summary: '', 
-        date: 'Recent' 
-      }));
+    
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const newsItems: NewsItem[] = [];
+    
+    chunks.forEach((c: any) => {
+      if (c.web && c.web.uri && c.web.title) {
+        let source = 'Insights';
+        try {
+          const urlObj = new URL(c.web.uri);
+          const hostname = urlObj.hostname.toLowerCase().replace('www.', '');
+          
+          // Scrub technical junk like vertexaisearch or internal IDs
+          if (hostname.includes('vertexaisearch') || hostname.includes('google.com') || hostname.includes('googleapis')) {
+            source = 'Tech Feed';
+          } else {
+            // Take the domain part as a clean source name
+            source = hostname.split('.')[0].toUpperCase();
+          }
+        } catch (e) {
+          source = 'Verified';
+        }
+
+        // Additional scrub for the title just in case
+        let cleanTitle = c.web.title;
+        if (cleanTitle.includes('vertexaisearch')) {
+          cleanTitle = cleanTitle.split('vertexaisearch')[0].trim();
+        }
+
+        newsItems.push({
+          title: cleanTitle,
+          url: c.web.uri,
+          source: source,
+          summary: '',
+          date: 'Recent'
+        });
+      }
+    });
+
+    // Ensure we take up to 10
+    return newsItems.slice(0, 10);
   } catch (e) {
+    console.error("News fetch failed", e);
     return [];
   }
 };
@@ -290,7 +321,7 @@ export const generatePracticeQuestions = async (careerTitle: string, topic?: str
   if (!ai) return [];
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: `Generate 10 technical MCQs for ${careerTitle} ${topic || ''}. JSON array: {id, question, options[4], correctIndex, explanation, topic}`,
       config: { responseMimeType: "application/json" }
     });
@@ -307,7 +338,7 @@ export const generateCompanyInterviewQuestions = async (careerTitle: string, fil
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
