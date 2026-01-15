@@ -153,7 +153,7 @@ const DeleteCareerConfirmationModal = ({ onConfirm, onCancel }: { onConfirm: () 
 
 const DateEditModal = ({ date, setDate, onConfirm, onCancel }: { date: string, setDate: (d: string) => void, onConfirm: () => void, onCancel: () => void }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-w-sm w-full shadow-2xl">
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-sm w-full shadow-2xl">
             <h2 className="text-xl font-bold text-white mb-4">Change Target Date</h2>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white mb-6 color-scheme-dark" />
             <div className="flex gap-3">
@@ -319,15 +319,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
           const stats: Record<string, { progress: number, daysLeft: number }> = {}; 
           user.activeCareers.forEach(c => { 
               const r = getRoadmap(user.id, c.careerId) || []; 
+              const daysLeft = calculateRemainingDays(r);
               let total = 0; let completed = 0; r.forEach(p => { p.items.forEach(i => { total++; if (i.status === 'completed') completed++; }); }); 
               const prog = total === 0 ? 0 : Math.round((completed / total) * 100); 
-              const parts = c.targetCompletionDate.split('-'); 
-              let days = 0; if (parts.length === 3) { 
-                  const targetDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), 12, 0, 0); 
-                  const today = new Date(); today.setHours(12, 0, 0, 0); 
-                  const diff = Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)); 
-                  days = diff >= 0 ? diff + 1 : 0; 
-              } stats[c.careerId] = { progress: prog, daysLeft: days }; 
+              stats[c.careerId] = { progress: prog, daysLeft }; 
           }); 
           setCareerStats(stats); 
       } 
@@ -558,17 +553,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
       return diffDays + 1;
   };
 
-  const getWorkDaysRemaining = () => {
-      if (!roadmap) return 0;
-      return calculateRemainingDays(roadmap);
-  };
-
-  const calendarDaysLeft = getCalendarDaysRemaining();
-  const workDaysLeft = getWorkDaysRemaining();
+  const workDaysLeft = calculateRemainingDays(roadmap || []);
   const daysRemaining = workDaysLeft; 
 
   const getPacingStatus = () => {
       if (!currentCareerDetails || !roadmap) return { status: 'on-track', days: 0, message: 'On track' } as const;
+      const calendarDaysLeft = getCalendarDaysRemaining();
       const rawDiff = calendarDaysLeft - workDaysLeft;
       const diff = rawDiff > 0 ? rawDiff - 1 : rawDiff;
       if (diff > 0) return { status: 'ahead', days: diff, message: `${diff} day${diff > 1 ? 's' : ''} ahead` } as const;
@@ -827,7 +817,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 flex flex-col justify-between">
                      <div className="mb-6"><h3 className="text-slate-400 font-medium mb-4 flex items-center gap-2"><Target className="h-4 w-4 text-indigo-400" /> Career Progress</h3><div className="flex items-end gap-2 mb-2"><span className="text-5xl font-bold text-white">{progress}%</span><span className="text-sm text-slate-500 mb-1.5">complete</span></div><div className="h-2 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-indigo-500" style={{width: `${progress}%`}}></div></div></div>
                      <div className="space-y-4">
-                         <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between"><div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Tasks Pending</div><div className="text-xl font-bold text-white">{daysRemaining} Items</div></div><Clock className="h-5 w-5 text-slate-600" /></div>
+                         <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between"><div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Days Pending</div><div className="text-xl font-bold text-white">{daysRemaining} Days</div></div><Clock className="h-5 w-5 text-slate-600" /></div>
                          <div className={`p-4 rounded-2xl border flex items-center justify-between ${pacing.status === 'ahead' ? 'bg-emerald-500/10 border-emerald-500/20' : pacing.status === 'behind' ? 'bg-red-500/10 border-red-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}><div><div className={`text-xs font-bold uppercase tracking-wider mb-1 ${pacing.status === 'ahead' ? 'text-emerald-400' : pacing.status === 'behind' ? 'text-red-400' : 'text-blue-400'}`}>Current Pace</div><div className="text-sm font-bold text-white">{pacing.message}</div></div><TrendingUp className="h-5 w-5" /></div>
                      </div>
                  </div>

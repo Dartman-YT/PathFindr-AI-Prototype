@@ -51,7 +51,25 @@ export const Roadmap: React.FC<RoadmapProps> = ({
       return roadmap.flatMap(phase => phase.items || []);
   }, [roadmap]);
 
-  // Task B cannot be started until Task A is completed.
+  const parseDurationInDays = (durationStr: string): number => {
+    const str = durationStr.toLowerCase();
+    const num = parseInt(str) || 1;
+    if (str.includes('week')) return num * 7;
+    if (str.includes('month')) return num * 30;
+    return num;
+  };
+
+  // Pre-calculate cumulative days for each item
+  const itemStartDays = useMemo(() => {
+    let currentDay = 1;
+    const map: Record<string, number> = {};
+    flatRoadmapItems.forEach(item => {
+        map[item.id] = currentDay;
+        currentDay += parseDurationInDays(item.duration);
+    });
+    return map;
+  }, [flatRoadmapItems]);
+
   const isLocked = (item: RoadmapItem) => {
       if (item.status === 'completed') return false;
       const index = flatRoadmapItems.findIndex(i => i.id === item.id);
@@ -253,7 +271,7 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                                 </div>
                                 <div>
                                     <h3 className={`font-bold text-sm md:text-base ${isPhaseDone ? 'text-emerald-400' : 'text-slate-200'}`}>{phase.phaseName}</h3>
-                                    <div className="text-[10px] text-slate-500 uppercase font-bold">{completedCount}/{totalCount} Completed</div>
+                                    <div className="text-[10px] text-slate-500 uppercase font-bold">{completedCount}/{totalCount} Tasks Complete</div>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3">
@@ -267,6 +285,8 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                                     const showDetails = expandedLearnMoreItems.has(item.id);
                                     const locked = isLocked(item);
                                     const done = item.status === 'completed';
+                                    const startDay = itemStartDays[item.id] || 1;
+                                    const dayLabel = `Start Day ${startDay}`;
 
                                     return (
                                         <div key={item.id} className={`rounded-xl border transition-all overflow-hidden ${done ? 'bg-slate-900/50 border-slate-800/50 opacity-60' : locked ? 'bg-slate-950 border-slate-800 grayscale' : 'bg-slate-800/30 border-slate-700/50 hover:border-indigo-500/30'}`}>
@@ -276,10 +296,14 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                                                 </button>
                                                 <div className={`flex-1 min-w-0 ${locked ? 'opacity-40' : 'cursor-pointer'}`} onClick={() => !locked && handleTaskClick(item)}>
                                                     <div className="flex items-center gap-2 mb-0.5">
-                                                        <span className="text-[10px] font-black text-indigo-500 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 uppercase tracking-tighter shrink-0">{item.duration}</span>
+                                                        <span className="text-[10px] font-black text-indigo-500 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 uppercase tracking-tighter shrink-0">{dayLabel}</span>
                                                         <span className={`font-bold text-sm truncate ${done ? 'line-through text-slate-500' : 'text-slate-300'}`}>{item.title}</span>
                                                     </div>
-                                                    <p className="text-[10px] text-slate-500 line-clamp-1">{item.description}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] text-slate-500 uppercase font-bold">{item.duration}</span>
+                                                        <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
+                                                        <p className="text-[10px] text-slate-500 line-clamp-1">{item.description}</p>
+                                                    </div>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <button onClick={(e) => toggleLearnMore(e, item)} className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${showDetails ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-white'}`}>Details</button>
