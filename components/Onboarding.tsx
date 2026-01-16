@@ -143,6 +143,19 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isNewUser = 
       }
   };
 
+  const handleCareerSearch = async () => {
+      if (!searchQuery.trim()) return;
+      setIsSearching(true);
+      try {
+          const res = await searchCareers(searchQuery.trim());
+          setCareers(res);
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setIsSearching(false);
+      }
+  };
+
   const handleCareerSelect = async (career: CareerOption) => {
       setSelectedCareer(career);
       setStep('skill_quiz');
@@ -271,7 +284,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isNewUser = 
                               <button 
                                 onClick={() => savePsychAnswer(customAnswer)}
                                 disabled={!customAnswer.trim()}
-                                className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-50 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                   Confirm
                               </button>
@@ -335,15 +348,12 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isNewUser = 
                             className="bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-3 w-full md:w-64 focus:border-indigo-500 outline-none backdrop-blur-sm"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleCareerSearch()}
                         />
                         <button 
-                            onClick={async () => {
-                                setIsSearching(true);
-                                const res = await searchCareers(searchQuery);
-                                setCareers(res);
-                                setIsSearching(false);
-                            }}
-                            className="bg-slate-800 px-4 rounded-xl hover:bg-slate-700 text-white"
+                            onClick={handleCareerSearch}
+                            disabled={isSearching || !searchQuery.trim()}
+                            className="bg-slate-800 px-4 rounded-xl hover:bg-slate-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
                             {isSearching ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
                         </button>
@@ -390,12 +400,18 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isNewUser = 
                                 </button>
                             )}
                         </>
-                    ) : !isAnalyzing && (
+                    ) : !isAnalyzing && !isSearching && (
                         <div className="col-span-full py-12 text-center bg-slate-900/50 border border-slate-800 rounded-3xl">
                             <Bot className="h-12 w-12 text-slate-500 mx-auto mb-4" />
                             <h3 className="text-xl font-bold text-white mb-2">No suggestions found</h3>
                             <p className="text-slate-400 mb-6 max-w-sm mx-auto">Nova couldn't find matches for this query. Try a more general term or re-analyze.</p>
                             <button onClick={submitAnalysis} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all">Try Re-Analysis</button>
+                        </div>
+                    )}
+                    {isSearching && (
+                        <div className="col-span-full py-20 flex flex-col items-center justify-center animate-pulse">
+                             <RefreshCw className="h-12 w-12 text-indigo-500 animate-spin mb-4" />
+                             <h3 className="text-xl font-bold text-white">Searching the Industry...</h3>
                         </div>
                     )}
                 </div>

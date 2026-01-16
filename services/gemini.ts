@@ -98,9 +98,15 @@ export const searchCareers = async (query: string): Promise<CareerOption[]> => {
   const prompt = `
     ${NOVA_PERSONA}
     The user is searching for: "${query}".
-    Provide exactly 3 professional variations or specializations related to this search.
-    Include a high-fidelity fitScore and analytical reasoning.
-    Return JSON array: [{id, title, description, fitScore, reason}]
+
+    STRICT TASK:
+    1. Identify the top 3 professional career paths that most accurately match or relate to this search term.
+    2. The first result MUST be the most direct interpretation of "${query}".
+    3. Calculate a high-fidelity "fitScore" (0-100) based strictly on how well each career matches the search intent.
+    4. Provide a concise description and a professional "reason" for the match.
+    5. Return exactly 3 items.
+
+    Return JSON array: [{"id": "string", "title": "string", "description": "string", "fitScore": number, "reason": "string"}]
   `;
 
   try {
@@ -111,6 +117,7 @@ export const searchCareers = async (query: string): Promise<CareerOption[]> => {
     });
     return JSON.parse(cleanJsonString(response.text || "[]"));
   } catch (e) {
+    console.error("Career search failed:", e);
     return [];
   }
 };
@@ -290,7 +297,7 @@ export const fetchTechNews = async (topic: string): Promise<NewsItem[]> => {
         let source = 'Insights';
         try {
           const urlObj = new URL(c.web.uri);
-          const hostname = urlObj.hostname.toLowerCase().replace('www.', '');
+          const hostname = urlObj.hostname.toLowerCase().replace('width.', '');
           
           if (hostname.includes('vertexaisearch') || hostname.includes('google.com') || hostname.includes('googleapis')) {
             source = 'Tech Feed';
