@@ -137,7 +137,8 @@ const App: React.FC = () => {
         savePracticeData(user.id, selectedCareer.id, practiceData);
     } catch (e) {
         console.error("Context generation failed", e);
-        setRoadmap({ phases: [], recommendedCertificates: [] });
+        // Fix: Added missing recommendedInternships property to satisfy the RoadmapData interface
+        setRoadmap({ phases: [], recommendedCertificates: [], recommendedInternships: [] });
     }
   };
 

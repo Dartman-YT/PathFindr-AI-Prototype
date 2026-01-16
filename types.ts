@@ -39,7 +39,7 @@ export interface RoadmapItem {
   id: string;
   title: string;
   description: string;
-  type: 'skill' | 'project' | 'internship';
+  type: 'skill' | 'project';
   duration: string; // e.g., "2 weeks"
   status: 'pending' | 'in-progress' | 'completed';
   completedAt?: number; // Timestamp for velocity tracking
@@ -63,9 +63,17 @@ export interface RecommendedCertificate {
   relevance: string;
 }
 
+export interface RecommendedInternship {
+  title: string;
+  company: string;
+  url: string;
+  description: string;
+}
+
 export interface RoadmapData {
   phases: RoadmapPhase[];
   recommendedCertificates: RecommendedCertificate[];
+  recommendedInternships: RecommendedInternship[];
 }
 
 export interface NewsItem {

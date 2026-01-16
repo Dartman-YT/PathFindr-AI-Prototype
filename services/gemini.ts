@@ -114,23 +114,23 @@ export const generateRoadmap = async (
   const prompt = `
       ${NOVA_PERSONA}
       Architect a professional roadmap for: "${careerTitle}".
-      Total Duration to Cover: ${totalDays} Days. Experience Level: ${expLevel}.
+      Total Duration: ${totalDays} Days. Experience Level: ${expLevel}.
       Additional Focus: "${focusAreas}".
       
       STRICT ARCHITECTURAL RULES:
       1. Every task is essentially a 1-day milestone.
-      2. Tasks MUST ONLY be of these three types:
+      2. Tasks within phases MUST ONLY be of these two types:
          - "skill": Learning core concepts or technical topics.
          - "project": Building practical features, MVPs, or scripts.
-         - "internship": Searching, applying, or simulating workplace tasks.
-      3. DO NOT include "certificate" as a task within the phases. Instead, suggest them in the "recommendedCertificates" section.
-      4. The VERY LAST item of the VERY LAST phase MUST be a "Capstone Revision & Confidence Project" (type: project). 
-         It must be comprehensive, requiring the user to apply everything learned in previous phases to build confidence.
-      5. Each task item MUST have:
+      3. DO NOT include "certificate" or "internship" as tasks within the phases. 
+      4. Place industry certifications in "recommendedCertificates" and internships/placements in "recommendedInternships".
+      5. The VERY LAST item of the VERY LAST phase MUST be a "Final Capstone Revision & Confidence Project" (type: project). 
+         It must be a comprehensive project that revises previous concepts and builds absolute confidence in the user's ability to enter the industry.
+      6. Each task item MUST have:
          {
            "title": "Clear and descriptive task name",
            "description": "Short summary",
-           "type": "skill" | "project" | "internship",
+           "type": "skill" | "project",
            "importance": "high" | "medium" | "low",
            "explanation": "Deep professional guidance",
            "suggestedResources": [{"title": "Name", "url": "URL"}]
@@ -139,7 +139,8 @@ export const generateRoadmap = async (
       Output JSON format: 
       {
         "phases": [{ "phaseName": "Phase Title", "items": [...] }],
-        "recommendedCertificates": [{ "title": "Cert Name", "provider": "Coursera/AWS/etc", "url": "URL", "relevance": "Why this cert?" }]
+        "recommendedCertificates": [{ "title": "Cert Name", "provider": "Coursera/AWS/etc", "url": "URL", "relevance": "Why this cert?" }],
+        "recommendedInternships": [{ "title": "Role Name", "company": "Example Corp", "url": "URL", "description": "Short summary" }]
       }
     `;
 
@@ -162,18 +163,19 @@ export const generateRoadmap = async (
         id: `task-${generationId}-${pIdx}-${taskIdCounter++}`,
         status: 'pending',
         duration: '1 day',
-        type: item.type || 'skill',
+        type: item.type === 'project' ? 'project' : 'skill',
         suggestedResources: Array.isArray(item.suggestedResources) ? item.suggestedResources : []
       }))
     }));
 
     return {
       phases: processedPhases,
-      recommendedCertificates: data.recommendedCertificates || []
+      recommendedCertificates: data.recommendedCertificates || [],
+      recommendedInternships: data.recommendedInternships || []
     };
   } catch (e) {
     console.error("Roadmap generation failed", e);
-    return { phases: [], recommendedCertificates: [] };
+    return { phases: [], recommendedCertificates: [], recommendedInternships: [] };
   }
 };
 

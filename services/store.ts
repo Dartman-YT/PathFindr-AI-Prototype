@@ -61,9 +61,12 @@ export const getRoadmap = (userId: string, careerId: string): RoadmapData | null
   const str = localStorage.getItem(`${KEYS.ROADMAP}${userId}_${careerId}`);
   if (!str) return null;
   const data = JSON.parse(str);
-  // Migrate legacy data if it's just an array of phases
+  // Migrate legacy data
   if (Array.isArray(data)) {
-    return { phases: data, recommendedCertificates: [] };
+    return { phases: data, recommendedCertificates: [], recommendedInternships: [] };
+  }
+  if (!data.recommendedInternships) {
+    return { ...data, recommendedInternships: [] };
   }
   return data;
 };

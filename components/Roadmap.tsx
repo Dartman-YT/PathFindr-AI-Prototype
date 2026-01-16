@@ -155,7 +155,6 @@ export const Roadmap: React.FC<RoadmapProps> = ({
   const getItemIcon = (type: string) => {
       switch(type) {
           case 'project': return <Boxes className="h-3.5 w-3.5" />;
-          case 'internship': return <Briefcase className="h-3.5 w-3.5" />;
           default: return <GraduationCap className="h-3.5 w-3.5" />;
       }
   };
@@ -266,36 +265,65 @@ export const Roadmap: React.FC<RoadmapProps> = ({
         </div>
 
         {/* Global Recommendations Section */}
-        {roadmap.recommendedCertificates && roadmap.recommendedCertificates.length > 0 && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 overflow-hidden relative group">
-                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-                    <Award className="h-20 w-20 text-indigo-400" />
-                </div>
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2.5 bg-indigo-500/10 rounded-xl text-indigo-400">
-                        <Award className="h-6 w-6" />
+        <div className="grid md:grid-cols-2 gap-6">
+            {roadmap.recommendedCertificates && roadmap.recommendedCertificates.length > 0 && (
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Award className="h-20 w-20 text-indigo-400" />
                     </div>
-                    <div>
-                        <h3 className="text-xl font-black text-white leading-none">Recommended Credentials</h3>
-                        <p className="text-xs text-slate-500 mt-1 font-bold uppercase tracking-wider">Expert-curated global certifications</p>
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2.5 bg-indigo-500/10 rounded-xl text-indigo-400">
+                            <Award className="h-6 w-6" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-black text-white leading-none">Certifications</h3>
+                            <p className="text-[10px] text-slate-500 mt-1 font-bold uppercase tracking-wider">Expert-curated global credentials</p>
+                        </div>
                     </div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {roadmap.recommendedCertificates.map((cert, idx) => (
-                        <a key={idx} href={cert.url} target="_blank" rel="noreferrer" className="bg-slate-950/50 border border-slate-800 p-4 rounded-2xl hover:border-indigo-500/50 hover:bg-slate-900 transition-all group/card flex flex-col justify-between">
-                            <div>
+                    <div className="space-y-3">
+                        {roadmap.recommendedCertificates.map((cert, idx) => (
+                            <a key={idx} href={cert.url} target="_blank" rel="noreferrer" className="bg-slate-950/50 border border-slate-800 p-4 rounded-2xl hover:border-indigo-500/50 hover:bg-slate-900 transition-all group/card block">
                                 <div className="flex justify-between items-start mb-2">
-                                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-1 rounded-md">{cert.provider}</span>
+                                    <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-0.5 rounded-md">{cert.provider}</span>
                                     <ExternalLink className="h-3 w-3 text-slate-700 group-hover/card:text-indigo-400 transition-colors" />
                                 </div>
                                 <h4 className="font-bold text-white text-sm group-hover/card:text-indigo-200 transition-colors">{cert.title}</h4>
-                                <p className="text-[11px] text-slate-400 mt-2 line-clamp-2 italic">"{cert.relevance}"</p>
-                            </div>
-                        </a>
-                    ))}
+                                <p className="text-[10px] text-slate-400 mt-1 line-clamp-1 italic">"{cert.relevance}"</p>
+                            </a>
+                        ))}
+                    </div>
                 </div>
-            </div>
-        )}
+            )}
+
+            {roadmap.recommendedInternships && roadmap.recommendedInternships.length > 0 && (
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Briefcase className="h-20 w-20 text-emerald-400" />
+                    </div>
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400">
+                            <Briefcase className="h-6 w-6" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-black text-white leading-none">Industry Placements</h3>
+                            <p className="text-[10px] text-slate-500 mt-1 font-bold uppercase tracking-wider">Targeted Internship opportunities</p>
+                        </div>
+                    </div>
+                    <div className="space-y-3">
+                        {roadmap.recommendedInternships.map((job, idx) => (
+                            <a key={idx} href={job.url} target="_blank" rel="noreferrer" className="bg-slate-950/50 border border-slate-800 p-4 rounded-2xl hover:border-emerald-500/50 hover:bg-slate-900 transition-all group/card block">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded-md">{job.company}</span>
+                                    <ExternalLink className="h-3 w-3 text-slate-700 group-hover/card:text-emerald-400 transition-colors" />
+                                </div>
+                                <h4 className="font-bold text-white text-sm group-hover/card:text-emerald-200 transition-colors">{job.title}</h4>
+                                <p className="text-[10px] text-slate-400 mt-1 line-clamp-1 italic">"{job.description}"</p>
+                            </a>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
 
         <div className="space-y-4">
             {phases.map((phase, pIndex) => {
@@ -355,7 +383,6 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                                                         <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border ${
                                                             isFinalItemOfPath ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
                                                             item.type === 'project' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
-                                                            item.type === 'internship' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
                                                             'bg-slate-500/10 border-slate-500/20 text-slate-400'
                                                         }`}>
                                                             {isFinalItemOfPath ? <Sparkles className="h-3.5 w-3.5" /> : getItemIcon(item.type)} {item.type}
