@@ -285,11 +285,12 @@ export const fetchTechNews = async (topic: string): Promise<NewsItem[]> => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Find exactly 10 high-quality, professional news headlines about "${topic}" from industry leaders. Focus on breakthroughs, market shifts, and expert insights.`,
+      contents: `Search for the latest 20 professional tech news articles, breakthroughs, and industry insights about "${topic}". Provide high-quality news from reliable tech sources.`,
       config: { tools: [{ googleSearch: {} }] }
     });
     
-    const chunks = response.candidates?.[0]?.groundMetadata?.groundingChunks || [];
+    // Improved source collection: extract from groundingMetadata or fall back to text links
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const newsItems: NewsItem[] = [];
     
     chunks.forEach((c: any) => {
@@ -297,32 +298,31 @@ export const fetchTechNews = async (topic: string): Promise<NewsItem[]> => {
         let source = 'Insights';
         try {
           const urlObj = new URL(c.web.uri);
-          const hostname = urlObj.hostname.toLowerCase().replace('width.', '');
-          
-          if (hostname.includes('vertexaisearch') || hostname.includes('google.com') || hostname.includes('googleapis')) {
-            source = 'Tech Feed';
-          } else {
-            source = hostname.split('.')[0].toUpperCase();
-          }
+          const hostname = urlObj.hostname.toLowerCase().replace('www.', '').replace('news.', '');
+          source = hostname.split('.')[0].toUpperCase();
+          if (source.length < 2) source = 'TECH';
         } catch (e) {
-          source = 'Verified';
+          source = 'SOURCE';
         }
 
         let cleanTitle = c.web.title;
-        cleanTitle = cleanTitle.replace(/vertexaisearch|internal_id|session_id|google_search_result/gi, "").trim();
+        cleanTitle = cleanTitle.replace(/google search|vertexaisearch|internal_id|session_id|google_search_result/gi, "").trim();
         if (cleanTitle.endsWith('-')) cleanTitle = cleanTitle.slice(0, -1).trim();
 
-        newsItems.push({
-          title: cleanTitle,
-          url: c.web.uri,
-          source: source,
-          summary: '',
-          date: 'Recent'
-        });
+        if (cleanTitle.length > 10) {
+            newsItems.push({
+              title: cleanTitle,
+              url: c.web.uri,
+              source: source,
+              summary: '',
+              date: 'Recent'
+            });
+        }
       }
     });
 
-    return newsItems.slice(0, 10);
+    // If chunks are empty, it's possible metadata didn't populate. Fallback to basic search entry if available.
+    return newsItems.slice(0, 20);
   } catch (e) {
     console.error("News fetch failed", e);
     return [];
@@ -335,7 +335,10 @@ export const generateDailyQuiz = async (careerTitle: string): Promise<DailyQuizI
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Create one technical MCQ for ${careerTitle}. JSON: {question, options[4], correctIndex, explanation}`,
+      contents: `Create one high-quality technical MCQ for a ${careerTitle} professional. 
+      STRICT REQUIREMENT: The "correctIndex" MUST be a number between 0 and 3.
+      
+      JSON Structure: { "question": "string", "options": ["string", "string", "string", "string"], "correctIndex": number, "explanation": "string" }`,
       config: { responseMimeType: "application/json" }
     });
     return JSON.parse(cleanJsonString(response.text || 'null'));

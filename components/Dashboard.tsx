@@ -20,7 +20,7 @@ interface DashboardProps {
 const PracticeQuestionCard: React.FC<{ question: PracticeQuestion, index: number }> = ({ question, index }) => {
     const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
     const handleSelect = (idx: number) => { if (selectedIdx !== null) return; setSelectedIdx(idx); };
-    const correctIdx = question.correctIndex;
+    const correctIdx = Number(question.correctIndex);
     const isAnswered = selectedIdx !== null;
     const isUserCorrect = selectedIdx === correctIdx;
     return (
@@ -582,7 +582,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const handleQuizAnswer = (index: number) => { 
       if (!dailyQuiz || selectedQuizOption !== null) return; 
       setSelectedQuizOption(index); 
-      const isRight = index === dailyQuiz.correctIndex; 
+      const isRight = index === Number(dailyQuiz.correctIndex); 
       setIsQuizCorrect(isRight); 
       const today = new Date().toISOString().split('T')[0]; 
       const updatedActiveCareers = user.activeCareers.map(c => c.careerId === career.id ? { ...c, lastQuizDate: today } : c); 
@@ -601,7 +601,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           setUser(updatedUser); 
           saveUser(updatedUser); 
       } 
-      setTimeout(() => setQuizState('completed'), 2000); 
+      // Delay switch to completed to let user read the explanation on the same screen
+      setTimeout(() => setQuizState('completed'), 5000); 
   };
 
   const handleSimulationSearch = async () => { 
@@ -646,7 +647,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const workDaysLeft = roadmap?.phases ? calculateRemainingDays(roadmap.phases) : 0;
-  const daysRemaining = workDaysLeft; 
+  const tasksLeftCount = roadmap?.phases ? roadmap.phases.reduce((acc, p) => acc + p.items.filter(i => i.status !== 'completed').length, 0) : 0;
 
   const getPacingStatus = () => {
       if (!currentCareerDetails || !roadmap) return { status: 'on-track', days: 0, message: 'On track' } as const;
@@ -696,7 +697,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               const rawDiff = currentCalendarDaysLeft - currentWorkDaysLeft;
               const diff = rawDiff > 0 ? rawDiff - 1 : rawDiff;
 
-              // Phase Mastery Feedback logic
+              // Local Phase Mastery Feedback
               const totalPhaseTasks = phase.items.length;
               const topSkills = phase.items.filter(it => it.type === 'skill').map(it => it.title).slice(0, 2);
               const hasProject = phase.items.some(it => it.type === 'project');
@@ -916,8 +917,51 @@ export const Dashboard: React.FC<DashboardProps> = ({
                          <div className="animate-fade-in">
                              <h3 className="text-lg md:text-xl font-bold text-white mb-6 leading-relaxed">{dailyQuiz.question}</h3>
                              <div className="grid grid-cols-1 gap-3">
-                                 {dailyQuiz.options?.map((opt, i) => <button key={i} onClick={() => handleQuizAnswer(i)} disabled={selectedQuizOption !== null} className={`w-full text-left p-4 rounded-xl border transition-all ${selectedQuizOption !== null ? i === dailyQuiz.correctIndex ? 'bg-emerald-500/20 border-emerald-500 text-white' : i === selectedQuizOption ? 'bg-red-500/20 border-red-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500 opacity-50' : 'bg-slate-900/50 border-slate-700 text-slate-200 hover:bg-indigo-900/30 hover:border-indigo-500 hover:text-white'}`}><div className="flex items-center gap-3"><div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold ${selectedQuizOption !== null && i === dailyQuiz.correctIndex ? 'bg-emerald-500 border-emerald-500 text-slate-950' : 'border-slate-600 text-slate-400'}`}>{['A','B','C','D'][i]}</div>{opt}</div></button>)}
+                                 {dailyQuiz.options?.map((opt, i) => {
+                                     const correctIdxNumber = Number(dailyQuiz.correctIndex);
+                                     const isCorrect = i === correctIdxNumber;
+                                     const isSelected = i === selectedQuizOption;
+                                     const hasSelected = selectedQuizOption !== null;
+                                     
+                                     let btnClass = "w-full text-left p-4 rounded-xl border transition-all flex justify-between items-center ";
+                                     let icon = null;
+
+                                     if (hasSelected) {
+                                         if (isCorrect) {
+                                             btnClass += "bg-emerald-500/20 border-emerald-500 text-white ring-1 ring-emerald-500/50";
+                                             icon = <CheckCircle2 className="h-5 w-5 text-emerald-400" />;
+                                         } else if (isSelected) {
+                                             btnClass += "bg-red-500/20 border-red-500 text-white ring-1 ring-red-500/50";
+                                             icon = <AlertCircle className="h-5 w-5 text-red-400" />;
+                                         } else {
+                                             btnClass += "bg-slate-900 border-slate-800 text-slate-500 opacity-50";
+                                         }
+                                     } else {
+                                         btnClass += "bg-slate-900/50 border-slate-700 text-slate-200 hover:bg-indigo-900/30 hover:border-indigo-500 hover:text-white";
+                                     }
+
+                                     return (
+                                         <button key={i} onClick={() => handleQuizAnswer(i)} disabled={hasSelected} className={btnClass}>
+                                             <div className="flex items-center gap-3">
+                                                 <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold ${hasSelected && isCorrect ? 'bg-emerald-500 border-emerald-500 text-slate-950' : hasSelected && isSelected && !isCorrect ? 'bg-red-500 border-red-500 text-white' : 'border-slate-600 text-slate-400'}`}>
+                                                     {['A','B','C','D'][i]}
+                                                 </div>
+                                                 {opt}
+                                             </div>
+                                             {icon}
+                                         </button>
+                                     );
+                                 })}
                              </div>
+                             {selectedQuizOption !== null && (
+                                 <div className="mt-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700 animate-fade-in">
+                                     <div className="flex items-center gap-2 mb-2">
+                                         <Info className="h-4 w-4 text-indigo-400" />
+                                         <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Analysis</div>
+                                     </div>
+                                     <p className="text-sm text-slate-300 leading-relaxed">{dailyQuiz.explanation}</p>
+                                 </div>
+                             )}
                          </div>
                      )}
                  </div>
@@ -935,13 +979,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                      <div className="relative group w-full sm:w-64"><Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" /><input type="text" placeholder="Search insights..." className="w-full pl-9 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-indigo-500 outline-none transition-all text-sm" value={homeSearchQuery} onChange={(e) => setHomeSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleHomeSearch()} /></div>
                  </div>
                  <div className="space-y-1">
-                     {isNewsLoading ? Array.from({length: 10}).map((_, i) => <div key={i} className="h-16 bg-slate-800/50 rounded-xl animate-pulse my-2"></div>) : news.length === 0 ? <div className="text-slate-500 text-center py-8">No recent headlines found.</div> : news.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="group flex items-center justify-between p-4 rounded-xl hover:bg-slate-800 transition-all border border-transparent hover:border-slate-700"><div className="flex items-center gap-4"><span className="text-xs font-black text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-md border border-indigo-500/20 w-24 truncate text-center shrink-0 uppercase tracking-tighter">{item.source}</span><h3 className="text-sm md:text-base font-medium text-slate-300 group-hover:text-white transition-colors line-clamp-1">{item.title}</h3></div><ExternalLink className="h-4 w-4 text-slate-600 group-hover:text-indigo-400 transition-colors shrink-0" /></a>)}
+                     {isNewsLoading ? Array.from({length: 10}).map((_, i) => <div key={i} className="h-16 bg-slate-800/50 rounded-xl animate-pulse my-2"></div>) : news.length === 0 ? <div className="text-slate-500 text-center py-8">No recent headlines found. Try a different search query.</div> : news.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="group flex items-center justify-between p-4 rounded-xl hover:bg-slate-800 transition-all border border-transparent hover:border-slate-700"><div className="flex items-center gap-4"><span className="text-xs font-black text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-md border border-indigo-500/20 w-24 truncate text-center shrink-0 uppercase tracking-tighter">{item.source}</span><h3 className="text-sm md:text-base font-medium text-slate-300 group-hover:text-white transition-colors line-clamp-1">{item.title}</h3></div><ExternalLink className="h-4 w-4 text-slate-600 group-hover:text-indigo-400 transition-colors shrink-0" /></a>)}
                  </div>
             </div>
           </div>
         );
       case 'roadmap':
-        return <Roadmap roadmap={roadmap} user={user} onSubscribe={handleSubscribe} onUpdateProgress={handleProgress} onReset={handleResetRoadmap} onResetPhase={handleResetPhase} onSwitchCareer={handleSwitchCareer} onEditTargetDate={() => { setPendingTargetDate(currentCareerDetails?.targetCompletionDate || ''); setShowDateEditModal(true); }} pacing={pacing} isLoading={isRoadmapLoading} daysRemaining={daysRemaining} />;
+        return <Roadmap roadmap={roadmap} user={user} onSubscribe={handleSubscribe} onUpdateProgress={handleProgress} onReset={handleResetRoadmap} onResetPhase={handleResetPhase} onSwitchCareer={handleSwitchCareer} onEditTargetDate={() => { setPendingTargetDate(currentCareerDetails?.targetCompletionDate || ''); setShowDateEditModal(true); }} pacing={pacing} isLoading={isRoadmapLoading} daysRemaining={tasksLeftCount} />;
       case 'practice':
           return (
               <div className="bg-slate-900 rounded-3xl border border-slate-800 min-h-[80vh] flex flex-col overflow-hidden">
