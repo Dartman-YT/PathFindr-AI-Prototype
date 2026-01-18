@@ -52,6 +52,56 @@ const CountdownTimer = () => {
     return <span className="text-white font-mono font-bold tracking-widest">{timeLeft}</span>;
 };
 
+const FormattedText: React.FC<{ text: string }> = ({ text }) => {
+  const lines = text.split('\n');
+  
+  return (
+    <div className="space-y-2">
+      {lines.map((line, i) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={i} className="h-2" />;
+
+        // Handle Headings (###)
+        if (trimmed.startsWith('### ')) {
+          return (
+            <h4 key={i} className="text-indigo-400 font-black text-sm uppercase tracking-widest mt-4 mb-2">
+              {trimmed.substring(4)}
+            </h4>
+          );
+        }
+
+        // Handle Bullets
+        const isBullet = trimmed.startsWith('* ') || trimmed.startsWith('- ');
+        const cleanLine = isBullet ? trimmed.substring(2) : trimmed;
+
+        // Handle Bold (**text**)
+        const parts = cleanLine.split(/(\*\*.*?\*\*)/g);
+        const content = parts.map((part, j) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={j} className="font-black text-white">{part.slice(2, -2)}</strong>;
+          }
+          return part;
+        });
+
+        if (isBullet) {
+          return (
+            <div key={i} className="flex gap-2 pl-1">
+              <span className="text-indigo-500 font-black">•</span>
+              <span className="text-slate-300 text-sm leading-relaxed">{content}</span>
+            </div>
+          );
+        }
+
+        return (
+          <p key={i} className="text-slate-300 text-sm leading-relaxed">
+            {content}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
 const ChatWindow: React.FC<{ isOpen: boolean; onClose: () => void; careerTitle: string; history: ChatMessage[]; onSend: (msg: string) => void; isTyping: boolean }> = ({ isOpen, onClose, careerTitle, history, onSend, isTyping }) => {
     const [input, setInput] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -60,8 +110,26 @@ const ChatWindow: React.FC<{ isOpen: boolean; onClose: () => void; careerTitle: 
     return (
         <div className="fixed bottom-24 md:bottom-10 right-4 md:right-10 w-80 md:w-96 h-[500px] bg-slate-900 border border-indigo-500/30 rounded-3xl shadow-2xl flex flex-col overflow-hidden z-[70] animate-fade-in">
             <div className="bg-slate-950 p-4 border-b border-slate-800 flex justify-between items-center"><div className="flex items-center gap-2"><div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400"><MessageSquare className="h-5 w-5" /></div><div><h3 className="font-bold text-white text-sm">Nova Support</h3><p className="text-xs text-slate-500">Online</p></div></div><button onClick={onClose} className="p-1 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white"><X className="h-5 w-5" /></button></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/50">{history.map(msg => (<div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 rounded-tl-none'}`}>{msg.text.split('\n').map((line, i) => <p key={i} className={i > 0 ? "mt-2" : ""}>{line}</p>)}</div></div>))}{isTyping && (<div className="flex justify-start"><div className="bg-slate-800 p-3 rounded-2xl rounded-tl-none text-slate-400 text-xs flex items-center gap-1"><span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce"></span><span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce delay-100"></span><span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce delay-200"></span></div></div>)}<div ref={messagesEndRef} /></div>
-            <div className="p-4 bg-slate-950 border-t border-slate-800"><div className="flex gap-2"><input type="text" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !isTyping && input.trim() && (onSend(input), setInput(''))} placeholder="Type a message..." className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none" /><button onClick={() => { if(input.trim()) { onSend(input); setInput(''); }}} disabled={!input.trim() || isTyping} className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white disabled:opacity-50"><Send className="h-5 w-5" /></button></div></div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/50">
+              {history.map(msg => (
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] p-3.5 rounded-2xl ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none text-sm' : 'bg-slate-800 text-slate-200 rounded-tl-none shadow-lg shadow-black/20'}`}>
+                    <FormattedText text={msg.text} />
+                  </div>
+                </div>
+              ))}
+              {isTyping && (
+                <div className="flex justify-start">
+                  <div className="bg-slate-800 p-3 rounded-2xl rounded-tl-none text-slate-400 text-xs flex items-center gap-1 shadow-md">
+                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
+                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce delay-100"></span>
+                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce delay-200"></span>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+            <div className="p-4 bg-slate-950 border-t border-slate-800"><div className="flex gap-2"><input type="text" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !isTyping && input.trim() && (onSend(input), setInput(''))} placeholder="Ask about your current task..." className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none" /><button onClick={() => { if(input.trim()) { onSend(input); setInput(''); }}} disabled={!input.trim() || isTyping} className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white disabled:opacity-50 transition-colors"><Send className="h-5 w-5" /></button></div></div>
         </div>
     );
 };
@@ -101,7 +169,7 @@ const PhaseAdaptationModal = ({ status, diff, onOptionSelect, onClose }: { statu
 
 const FeedbackModal = ({ onClose, text, setText }: { onClose: () => void, text: string, setText: (s: string) => void }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-w-md w-full shadow-2xl">
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-md w-full shadow-2xl">
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-white">Send Feedback</h2>
                 <button onClick={onClose}><X className="h-5 w-5 text-slate-500" /></button>
@@ -291,8 +359,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', text, timestamp: Date.now() }; 
       setChatHistory(prev => [...prev, userMsg]); 
       setIsChatTyping(true); 
+
+      // Find the next pending task to give Nova context
+      const nextTask = roadmap?.phases
+          .flatMap(p => p.items)
+          .find(item => item.status === 'pending');
+      
+      const taskContext = nextTask 
+          ? `User's current priority task: "${nextTask.title}". Description: ${nextTask.description}. Architectural guidance for this task: ${nextTask.explanation || 'Directly relevant to career growth.'}` 
+          : "User has completed all tasks in the current roadmap phases.";
+
       try { 
-          const responseText = await generateChatResponse(text, career.title, chatHistory); 
+          const responseText = await generateChatResponse(text, career.title, chatHistory, taskContext); 
           const botMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'bot', text: responseText, timestamp: Date.now() }; 
           setChatHistory(prev => [...prev, botMsg]); 
       } catch (e) { 
@@ -408,17 +486,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
       } catch(e) { console.error(e); } finally { setIsLoadingMore(false); } 
   };
 
-  const handleLoadMoreInterview = async () => { 
+  const handleLoadMoreInterview = async (mode: string) => { 
       setIsLoadingMore(true); 
       try { 
-          const currentMode = companyFilter === 'All' ? 'Startups' : companyFilter;
-          const newQs = await generateCompanyInterviewQuestions(career.title, currentMode); 
-          const existingForFilter = interviewQuestionBank[currentMode] || [];
-          const updatedForFilter = [...existingForFilter, ...newQs];
-          const updatedBank = { ...interviewQuestionBank, [currentMode]: updatedForFilter };
+          const newQs = await generateCompanyInterviewQuestions(career.title, mode); 
+          const updatedBank = { ...interviewQuestionBank, [mode]: [...(interviewQuestionBank[mode] || []), ...newQs] }; 
           setInterviewQuestionBank(updatedBank); 
           savePracticeData(user.id, career.id, { interviews: updatedBank }); 
-          showToastMsg(`Added new ${currentMode} questions to local bank.`);
+          showToastMsg(`Added new ${mode} questions to local bank.`);
       } catch(e) { console.error(e); } finally { setIsLoadingMore(false); } 
   };
 
@@ -902,7 +977,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                           )) : <div className="col-span-2 text-center py-10 text-slate-500">No matching interview questions in local bank.</div>}
                                       </div>
                                       {companyFilter !== 'AI Challenge' && (
-                                          <button onClick={handleLoadMoreInterview} disabled={isLoadingMore} className="w-full py-4 mt-8 bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                                          <button onClick={() => handleLoadMoreInterview(companyFilter === 'All' ? 'Startups' : companyFilter)} disabled={isLoadingMore} className="w-full py-4 mt-8 bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
                                               {isLoadingMore ? <RefreshCw className="h-5 w-5 animate-spin"/> : <PlusCircle className="h-5 w-5"/>} 
                                               {isLoadingMore ? 'Processing...' : 'Architect More Interview Data'}
                                           </button>
@@ -1034,10 +1109,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {showFeedbackModal && <FeedbackModal onClose={() => setShowFeedbackModal(false)} text={feedbackText} setText={setFeedbackText} />}
       {confirmAction && <ConfirmationModal action={confirmAction} onConfirm={confirmAction.type === 'reset_all' ? executeResetAll : executeDeleteAccount} onCancel={() => setConfirmAction(null)} />}
       {careerToDelete && <DeleteCareerConfirmationModal onConfirm={executeDeleteCareer} onCancel={() => setCareerToDelete(null)} />}
+      {showDateEditModal && <DeleteCareerConfirmationModal onConfirm={() => {}} onCancel={() => setShowDateEditModal(false)} />}
       {showDateEditModal && <DateEditModal date={pendingTargetDate} setDate={setPendingTargetDate} onConfirm={initiateDateUpdate} onCancel={() => setShowDateEditModal(false)} />}
       {showDateStrategyModal && <DateStrategyModal type={dateStrategyType} onAdapt={(t) => handleAdaptation(t, pendingTargetDate)} onManual={() => handleDateUpdateWithoutAI(pendingTargetDate)} onClose={() => setShowDateStrategyModal(false)} />}
       {isAdapting && <AdaptingOverlay />}
-      {toast && <div className="fixed bottom-24 md:bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 border border-emerald-500/50 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-fade-in z-[100]"><CheckCircle2 className="h-5 w-5 text-emerald-500" /><span className="font-medium text-sm">{toast.message}</span></div>}
+      {toast && <div className="fixed bottom-24 md:bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 border border-emerald-500/50 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-fade-in z-[100]"><CheckCircle2 className="h-5 w-5 text-emerald-400" /><span className="font-medium text-sm">{toast.message}</span></div>}
     </div>
   );
 };

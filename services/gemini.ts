@@ -289,7 +289,7 @@ export const fetchTechNews = async (topic: string): Promise<NewsItem[]> => {
       config: { tools: [{ googleSearch: {} }] }
     });
     
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const chunks = response.candidates?.[0]?.groundMetadata?.groundingChunks || [];
     const newsItems: NewsItem[] = [];
     
     chunks.forEach((c: any) => {
@@ -427,16 +427,32 @@ export const generateSimulationScenario = async (careerTitle: string): Promise<S
   }
 };
 
-export const generateChatResponse = async (message: string, careerTitle: string, history: ChatMessage[]): Promise<string> => {
+export const generateChatResponse = async (message: string, careerTitle: string, history: ChatMessage[], context?: string): Promise<string> => {
   const ai = getAI();
   if (!ai) return "I am currently in architect mode (offline).";
+  
+  const systemPrompt = `
+    ${NOVA_PERSONA}
+    You are chatting with a user pursuing a career as a ${careerTitle}.
+    
+    CURRENT CONTEXT:
+    ${context || 'No specific roadmap context provided.'}
+    
+    STRICT FORMATTING & CONTENT RULES:
+    1. EXTREME BREVITY: Provide only the most critical information. Keep responses under 60-80 words.
+    2. SIMPLICITY: Use basic language. No long-winded technical jargon unless requested.
+    3. STRUCTURE: Use "### Heading" for sub-topics, "**text**" for emphasis, and "-" for bullets.
+    4. TASK-AWARENESS: If the user is confused about their task, focus solely on that task using the context provided.
+    5. No unnecessary pleasantries. Get straight to the point.
+  `;
+
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `User: ${message}. Current focus: ${careerTitle}. Context: This is a professional career architect chat. Answer concisely and helpful.`
+      contents: `System: ${systemPrompt}\nUser: ${message}\nHistory: ${JSON.stringify(history.slice(-3))}`,
     });
-    return response.text || "I'm processing that. One moment.";
+    return response.text || "Architect busy. Try later.";
   } catch (e) {
-    return "The architect is busy. Try again soon.";
+    return "Connection error.";
   }
 };
