@@ -179,6 +179,8 @@ export const Roadmap: React.FC<RoadmapProps> = ({
 
   const isPaid = user.subscriptionStatus !== 'free';
   const calendarDaysLeft = getCalendarDaysRemaining();
+  // Ensure we use the actual count of tasks left for the header label
+  const tasksRemainingCount = flatRoadmapItems.filter(it => it.status !== 'completed').length;
 
   return (
     <div className="relative min-h-[80vh] pb-10 w-full overflow-x-hidden">
@@ -233,7 +235,7 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                             {pacing.message}
                         </div>
                         <div className="h-4 w-px bg-slate-800"></div>
-                        <span className="text-sm font-semibold text-slate-400">{daysRemaining} Tasks Left</span>
+                        <span className="text-sm font-semibold text-slate-400">{tasksRemainingCount} Tasks Left</span>
                     </div>
                 </div>
                 <div className="flex items-center gap-3 w-full md:w-auto">

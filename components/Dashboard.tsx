@@ -138,7 +138,7 @@ const QuestionSkeletonCard = () => (<div className="bg-slate-900 border border-s
 const InterviewSkeletonCard = () => (<div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 animate-pulse"><div className="flex justify-between items-start mb-4"><div className="h-4 bg-slate-800 rounded w-24"></div></div><div className="h-5 bg-slate-800 rounded w-full mb-6"></div><div className="h-10 bg-slate-800 rounded-xl"></div></div>);
 const CelebrationModal = ({ onClose }: { onClose: () => void }) => (<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}><div className="text-center pointer-events-auto bg-slate-900 border border-yellow-500/30 p-8 rounded-3xl shadow-2xl relative overflow-hidden"><div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-purple-500/10"></div><div className="relative z-10"><div className="text-6xl mb-6 animate-bounce">🏆</div><h2 className="text-3xl font-bold text-white mb-2">Congratulations!</h2><p className="text-slate-300 mb-8">You've completed the entire roadmap!</p><button onClick={onClose} className="px-8 py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-200 transition-colors">Continue</button></div></div></div>);
 
-const PhaseFeedbackModal = ({ phaseName, feedback, onRedesign, onClose }: { phaseName: string, feedback: string, onRedesign: () => void, onClose: () => void }) => (
+const PhaseFeedbackModal = ({ phaseName, feedback, isAhead, onClose }: { phaseName: string, feedback: string, isAhead: boolean, onClose: () => void }) => (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
         <div className="bg-slate-900 border border-indigo-500/40 p-8 rounded-[2.5rem] max-w-lg w-full shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-5">
@@ -150,23 +150,18 @@ const PhaseFeedbackModal = ({ phaseName, feedback, onRedesign, onClose }: { phas
                         <Star className="h-8 w-8" />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-white leading-tight">Phase Performance Review</h2>
-                        <p className="text-indigo-400 text-xs font-black uppercase tracking-widest">{phaseName} Mastered</p>
+                        <h2 className="text-2xl font-black text-white leading-tight">Phase Mastery Complete</h2>
+                        <p className="text-indigo-400 text-xs font-black uppercase tracking-widest">{phaseName} Achieved</p>
                     </div>
                 </div>
                 <div className="bg-slate-950/60 p-6 rounded-3xl border border-slate-800 mb-8">
                     <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Milestone Summary</h4>
                     <p className="text-slate-200 leading-relaxed text-sm">{feedback}</p>
-                    <p className="text-slate-400 mt-4 text-xs font-medium">Nova recommends assessing your goals: Would you like to redesign your remaining path for better alignment?</p>
                 </div>
-                <div className="space-y-3">
-                    <button onClick={onRedesign} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2">
-                        <RefreshCw className="h-5 w-5" /> Redesign Remaining Path
-                    </button>
-                    <button onClick={onClose} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-400 font-black uppercase tracking-widest rounded-2xl transition-all">
-                        Keep Current Roadmap
-                    </button>
-                </div>
+                <button onClick={onClose} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 group">
+                    {isAhead ? "I'm unstoppable, keep it up!" : "I've got this, let's keep pushing!"}
+                    <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                </button>
             </div>
         </div>
     </div>
@@ -347,7 +342,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isAdapting, setIsAdapting] = useState(false);
   const [phaseAdaptationState, setPhaseAdaptationState] = useState<{status: 'ahead'|'behind', diff: number, phaseIndex: number} | null>(null);
-  const [phaseFeedback, setPhaseFeedback] = useState<{ phaseName: string, feedback: string } | null>(null);
+  const [phaseFeedback, setPhaseFeedback] = useState<{ phaseName: string, feedback: string, isAhead: boolean } | null>(null);
 
   const [showDateEditModal, setShowDateEditModal] = useState(false);
   const [pendingTargetDate, setPendingTargetDate] = useState('');
@@ -701,13 +696,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
               const rawDiff = currentCalendarDaysLeft - currentWorkDaysLeft;
               const diff = rawDiff > 0 ? rawDiff - 1 : rawDiff;
 
-              // Local feedback mini summary
-              const totalTasks = phase.items.length;
-              const skills = phase.items.filter(i => i.type === 'skill').map(i => i.title).slice(0, 2);
-              const performance = diff > 0 ? "ahead of schedule" : diff < 0 ? "taking extra time to master depth" : "at a perfect steady pace";
-              const feedbackStr = `Completed ${totalTasks} tasks in ${phase.phaseName}, mastering ${skills.join(', ')}. You are currently ${performance}.`;
+              // Phase Mastery Feedback logic
+              const totalPhaseTasks = phase.items.length;
+              const topSkills = phase.items.filter(it => it.type === 'skill').map(it => it.title).slice(0, 2);
+              const hasProject = phase.items.some(it => it.type === 'project');
+              const progressVerdict = diff > 0 ? "ahead of schedule" : diff < 0 ? "operating with deep focus (behind schedule)" : "at a consistent pace";
               
-              setPhaseFeedback({ phaseName: phase.phaseName, feedback: feedbackStr });
+              const feedbackStr = `Completed ${totalPhaseTasks} milestones in ${phase.phaseName}, mastering ${topSkills.join(', ')}${hasProject ? ' and technical buildouts' : ''}. You are currently ${progressVerdict}.`;
+              
+              setPhaseFeedback({ phaseName: phase.phaseName, feedback: feedbackStr, isAhead: diff >= 0 });
               
               if (diff > 0) setPhaseAdaptationState({ status: 'ahead', diff, phaseIndex: phaseIndexToCheck });
               else if (diff < 0) setPhaseAdaptationState({ status: 'behind', diff: Math.abs(diff), phaseIndex: phaseIndexToCheck });
@@ -1150,7 +1147,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <button onClick={() => setIsChatOpen(!isChatOpen)} className="fixed bottom-24 md:bottom-10 right-4 md:right-10 w-14 h-14 bg-indigo-600 hover:bg-indigo-500 rounded-full shadow-2xl shadow-indigo-500/40 flex items-center justify-center z-[60] transition-transform hover:scale-105 active:scale-95">{isChatOpen ? <X className="h-6 w-6 text-white" /> : <MessageSquare className="h-6 w-6 text-white" />}</button>
       <ChatWindow isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} careerTitle={career.title} history={chatHistory} onSend={handleSendMessage} isTyping={isChatTyping} />
       {showCelebration && <CelebrationModal onClose={() => setShowCelebration(false)} />}
-      {phaseFeedback && <PhaseFeedbackModal phaseName={phaseFeedback.phaseName} feedback={phaseFeedback.feedback} onRedesign={() => { setPhaseAdaptationState({ status: pacing.status === 'behind' ? 'behind' : 'ahead', diff: pacing.days, phaseIndex: -1 }); setPhaseFeedback(null); }} onClose={() => setPhaseFeedback(null)} />}
+      {phaseFeedback && <PhaseFeedbackModal phaseName={phaseFeedback.phaseName} feedback={phaseFeedback.feedback} isAhead={phaseFeedback.isAhead} onClose={() => setPhaseFeedback(null)} />}
       {phaseAdaptationState && <PhaseAdaptationModal status={phaseAdaptationState.status} diff={phaseAdaptationState.diff} onOptionSelect={handlePhaseAdaptationOption} onClose={() => setPhaseAdaptationState(null)} />}
       {showFeedbackModal && <FeedbackModal onClose={() => setShowFeedbackModal(false)} text={feedbackText} setText={setFeedbackText} />}
       {confirmAction && <ConfirmationModal action={confirmAction} onConfirm={confirmAction.type === 'reset_all' ? executeResetAll : executeDeleteAccount} onCancel={() => setConfirmAction(null)} />}
