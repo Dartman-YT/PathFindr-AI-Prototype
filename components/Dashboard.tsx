@@ -647,7 +647,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       today.setHours(12, 0, 0, 0);
       const diffTime = targetDate.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays + 1;
+      return Math.max(0, diffDays + 1);
   };
 
   const workDaysLeft = roadmap?.phases ? calculateRemainingDays(roadmap.phases) : 0;
@@ -701,13 +701,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
               const rawDiff = currentCalendarDaysLeft - currentWorkDaysLeft;
               const diff = rawDiff > 0 ? rawDiff - 1 : rawDiff;
 
-              // Generate local mini-summary feedback
-              const completedCount = phase.items.length;
+              // Local feedback mini summary
+              const totalTasks = phase.items.length;
               const skills = phase.items.filter(i => i.type === 'skill').map(i => i.title).slice(0, 2);
-              const projects = phase.items.filter(i => i.type === 'project').map(i => i.title).slice(0, 1);
-              const performance = diff > 0 ? "You're operating at high velocity, staying ahead of schedule." : diff < 0 ? "You're taking a deep, thorough approach, which is slightly behind the initial timeline." : "You're maintaining a steady, consistent pace.";
-              
-              const feedbackStr = `You've successfully mastered ${completedCount} key milestones in ${phase.phaseName}. You covered critical topics like ${skills.join(', ')}${projects.length > 0 ? ` and built ${projects[0]}` : ''}. ${performance}`;
+              const performance = diff > 0 ? "ahead of schedule" : diff < 0 ? "taking extra time to master depth" : "at a perfect steady pace";
+              const feedbackStr = `Completed ${totalTasks} tasks in ${phase.phaseName}, mastering ${skills.join(', ')}. You are currently ${performance}.`;
               
               setPhaseFeedback({ phaseName: phase.phaseName, feedback: feedbackStr });
               
@@ -876,6 +874,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
+        const calendarDaysLeft = getCalendarDaysRemaining();
         return (
           <div className="space-y-8 animate-fade-in pb-10">
             <header className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
@@ -928,7 +927,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 flex flex-col justify-between">
                      <div className="mb-6"><h3 className="text-slate-400 font-medium mb-4 flex items-center gap-2"><Target className="h-4 w-4 text-indigo-400" /> Career Progress</h3><div className="flex items-end gap-2 mb-2"><span className="text-5xl font-bold text-white">{progress}%</span><span className="text-sm text-slate-500 mb-1.5">complete</span></div><div className="h-2 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-indigo-500" style={{width: `${progress}%`}}></div></div></div>
                      <div className="space-y-4">
-                         <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between"><div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Days Left</div><div className="text-xl font-bold text-white">{daysRemaining} Days</div></div><Clock className="h-5 w-5 text-slate-600" /></div>
+                         <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between"><div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Days Left</div><div className="text-xl font-bold text-white">{calendarDaysLeft} Days</div></div><Clock className="h-5 w-5 text-slate-600" /></div>
                          <div className={`p-4 rounded-2xl border flex items-center justify-between ${pacing.status === 'ahead' ? 'bg-emerald-500/10 border-emerald-500/20' : pacing.status === 'behind' ? 'bg-red-500/10 border-red-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}><div><div className={`text-xs font-bold uppercase tracking-wider mb-1 ${pacing.status === 'ahead' ? 'text-emerald-400' : pacing.status === 'behind' ? 'text-red-400' : 'text-blue-400'}`}>Current Pace</div><div className="text-sm font-bold text-white">{pacing.message}</div></div><TrendingUp className="h-5 w-5" /></div>
                      </div>
                  </div>

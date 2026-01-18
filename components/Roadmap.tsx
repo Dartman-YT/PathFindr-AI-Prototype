@@ -94,10 +94,21 @@ export const Roadmap: React.FC<RoadmapProps> = ({
   };
 
   const getActiveCareer = () => user.activeCareers.find(c => c.careerId === user.currentCareerId);
-  const getActiveCareerDate = () => getActiveCareer()?.targetCompletionDate || 'N/A';
+  const currentCareer = getActiveCareer();
+  const getActiveCareerDate = () => currentCareer?.targetCompletionDate || 'N/A';
   const getStartDateDisplay = () => {
-      const active = getActiveCareer();
-      return active ? new Date(active.addedAt).toLocaleDateString() : 'N/A';
+      return currentCareer ? new Date(currentCareer.addedAt).toLocaleDateString() : 'N/A';
+  };
+
+  const getCalendarDaysRemaining = () => {
+      if (!currentCareer?.targetCompletionDate) return 0;
+      const parts = currentCareer.targetCompletionDate.split('-');
+      const targetDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), 12, 0, 0);
+      const today = new Date();
+      today.setHours(12, 0, 0, 0);
+      const diffTime = targetDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return Math.max(0, diffDays + 1);
   };
 
   const handleResetRequest = () => {
@@ -167,7 +178,7 @@ export const Roadmap: React.FC<RoadmapProps> = ({
   );
 
   const isPaid = user.subscriptionStatus !== 'free';
-  const currentCareer = getActiveCareer();
+  const calendarDaysLeft = getCalendarDaysRemaining();
 
   return (
     <div className="relative min-h-[80vh] pb-10 w-full overflow-x-hidden">
@@ -222,7 +233,7 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                             {pacing.message}
                         </div>
                         <div className="h-4 w-px bg-slate-800"></div>
-                        <span className="text-sm font-semibold text-slate-400">{daysRemaining} Days Left</span>
+                        <span className="text-sm font-semibold text-slate-400">{daysRemaining} Tasks Left</span>
                     </div>
                 </div>
                 <div className="flex items-center gap-3 w-full md:w-auto">
@@ -238,7 +249,7 @@ export const Roadmap: React.FC<RoadmapProps> = ({
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
                 <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/50 flex flex-col justify-center text-center backdrop-blur-sm">
-                    <div className="text-2xl font-black text-white">{daysRemaining}</div>
+                    <div className="text-2xl font-black text-white">{calendarDaysLeft}</div>
                     <div className="text-[10px] uppercase text-slate-500 font-black tracking-widest mt-1">Days Left</div>
                 </div>
                 <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/50 flex flex-col justify-center px-5 backdrop-blur-sm">
