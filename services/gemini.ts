@@ -456,3 +456,30 @@ export const generateChatResponse = async (message: string, careerTitle: string,
     return "Connection error.";
   }
 };
+
+export const generatePhaseFeedback = async (phaseName: string, items: RoadmapItem[], careerTitle: string): Promise<string> => {
+  const ai = getAI();
+  if (!ai) return "Phase complete. Great progress!";
+  
+  const prompt = `
+    ${NOVA_PERSONA}
+    The user just completed the phase: "${phaseName}" for their ${careerTitle} roadmap.
+    Completed milestones: ${items.map(i => i.title).join(', ')}.
+    
+    TASK:
+    1. Review their accomplishments in this phase.
+    2. Provide an analytical evaluation of their performance.
+    3. Keep it brief and professional (max 60 words).
+    4. Conclude by suggesting they consider redesigning their roadmap if their goals have evolved.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+    });
+    return response.text || "Phase complete. You are making steady progress toward your career goals.";
+  } catch (e) {
+    return "Exceptional performance in this phase. Your foundational knowledge is solid.";
+  }
+};

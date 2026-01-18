@@ -239,7 +239,7 @@ export const Roadmap: React.FC<RoadmapProps> = ({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
                 <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/50 flex flex-col justify-center text-center backdrop-blur-sm">
                     <div className="text-2xl font-black text-white">{daysRemaining}</div>
-                    <div className="text-[10px] uppercase text-slate-500 font-black tracking-widest mt-1">Pending</div>
+                    <div className="text-[10px] uppercase text-slate-500 font-black tracking-widest mt-1">Days Left</div>
                 </div>
                 <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/50 flex flex-col justify-center px-5 backdrop-blur-sm">
                      <div className="flex justify-between items-end mb-2">
@@ -399,7 +399,7 @@ export const Roadmap: React.FC<RoadmapProps> = ({
                                                     <button onClick={(e) => toggleLearnMore(e, item)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
                                                         showDetails ? (isFinalItemOfPath ? 'bg-amber-600 border-amber-600 text-white' : 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-900/20') : 
                                                         'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-600'}`}>
-                                                        {showDetails ? 'Close' : 'View'}
+                                                        {showDetails ? 'Close' : 'Details'}
                                                     </button>
                                                 </div>
                                             </div>

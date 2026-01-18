@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { UserProfile, CareerOption, RoadmapPhase, NewsItem, RoadmapItem, DailyQuizItem, InterviewQuestion, PracticeQuestion, SimulationScenario, ChatMessage, RoadmapData } from '../types';
 import { Roadmap } from './Roadmap';
-import { fetchTechNews, generateRoadmap, calculateRemainingDays, generateDailyQuiz, generatePracticeTopics, generatePracticeQuestions, generateCompanyInterviewQuestions, generateSimulationScenario, generateChatResponse, generatePracticeDataBatch } from '../services/gemini';
+import { fetchTechNews, generateRoadmap, calculateRemainingDays, generateDailyQuiz, generatePracticeTopics, generatePracticeQuestions, generateCompanyInterviewQuestions, generateSimulationScenario, generateChatResponse, generatePracticeDataBatch, generatePhaseFeedback } from '../services/gemini';
 import { saveRoadmap, saveUser, getRoadmap, getCareerData, saveCareerData, setCurrentUser, getNewsCache, saveNewsCache, getDailyQuizCache, saveDailyQuizCache, deleteUser, getPracticeData, savePracticeData, PracticeDataStore } from '../services/store';
 import { Home, Map, Briefcase, User, LogOut, TrendingUp, PlusCircle, ChevronDown, ChevronUp, Clock, Trophy, AlertCircle, Target, Trash2, RotateCcw, PartyPopper, ArrowRight, Zap, Calendar, ExternalLink, X, RefreshCw, MessageSquare, CheckCircle2, Pencil, BrainCircuit, GraduationCap, Flame, Star, Search, Link, Building2, PlayCircle, Eye, EyeOff, ShieldAlert, Palette, Settings, Mail, Lock, CalendarDays, AlertTriangle, Moon, Sun, Send, Cpu, Sparkles, Compass, LayoutDashboard, BookOpen, Info } from 'lucide-react';
 
@@ -137,6 +137,39 @@ const ChatWindow: React.FC<{ isOpen: boolean; onClose: () => void; careerTitle: 
 const QuestionSkeletonCard = () => (<div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 animate-pulse"><div className="h-4 bg-slate-800 rounded w-3/4 mb-6"></div><div className="space-y-3"><div className="h-10 bg-slate-800 rounded-xl"></div><div className="h-10 bg-slate-800 rounded-xl"></div><div className="h-10 bg-slate-800 rounded-xl"></div><div className="h-10 bg-slate-800 rounded-xl"></div></div></div>);
 const InterviewSkeletonCard = () => (<div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 animate-pulse"><div className="flex justify-between items-start mb-4"><div className="h-4 bg-slate-800 rounded w-24"></div></div><div className="h-5 bg-slate-800 rounded w-full mb-6"></div><div className="h-10 bg-slate-800 rounded-xl"></div></div>);
 const CelebrationModal = ({ onClose }: { onClose: () => void }) => (<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}><div className="text-center pointer-events-auto bg-slate-900 border border-yellow-500/30 p-8 rounded-3xl shadow-2xl relative overflow-hidden"><div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-purple-500/10"></div><div className="relative z-10"><div className="text-6xl mb-6 animate-bounce">🏆</div><h2 className="text-3xl font-bold text-white mb-2">Congratulations!</h2><p className="text-slate-300 mb-8">You've completed the entire roadmap!</p><button onClick={onClose} className="px-8 py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-200 transition-colors">Continue</button></div></div></div>);
+
+const PhaseFeedbackModal = ({ phaseName, feedback, onRedesign, onClose }: { phaseName: string, feedback: string, onRedesign: () => void, onClose: () => void }) => (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
+        <div className="bg-slate-900 border border-indigo-500/40 p-8 rounded-[2.5rem] max-w-lg w-full shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-5">
+                <Trophy className="h-40 w-40 text-indigo-400" />
+            </div>
+            <div className="relative z-10">
+                <div className="flex items-center gap-4 mb-6">
+                    <div className="p-3 bg-indigo-500/20 rounded-2xl text-indigo-400">
+                        <Star className="h-8 w-8" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-black text-white leading-tight">Phase Performance Review</h2>
+                        <p className="text-indigo-400 text-xs font-black uppercase tracking-widest">{phaseName} Mastered</p>
+                    </div>
+                </div>
+                <div className="bg-slate-950/60 p-6 rounded-3xl border border-slate-800 mb-8">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Architect's Feedback</h4>
+                    <p className="text-slate-200 leading-relaxed italic text-sm">"{feedback}"</p>
+                </div>
+                <div className="space-y-3">
+                    <button onClick={onRedesign} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2">
+                        <RefreshCw className="h-5 w-5" /> Redesign Remaining Path
+                    </button>
+                    <button onClick={onClose} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-400 font-black uppercase tracking-widest rounded-2xl transition-all">
+                        Proceed with Current Flow
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+);
 
 const PhaseAdaptationModal = ({ status, diff, onOptionSelect, onClose }: { status: 'ahead' | 'behind', diff: number, onOptionSelect: (option: string) => void, onClose: () => void }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
@@ -313,6 +346,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isAdapting, setIsAdapting] = useState(false);
   const [phaseAdaptationState, setPhaseAdaptationState] = useState<{status: 'ahead'|'behind', diff: number, phaseIndex: number} | null>(null);
+  const [phaseFeedback, setPhaseFeedback] = useState<{ phaseName: string, feedback: string } | null>(null);
 
   const [showDateEditModal, setShowDateEditModal] = useState(false);
   const [pendingTargetDate, setPendingTargetDate] = useState('');
@@ -630,7 +664,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   
   const pacing = getPacingStatus();
 
-  const handleProgress = (itemId: string) => { 
+  const handleProgress = async (itemId: string) => { 
       if (!roadmap || !roadmap.phases) return; 
       const now = Date.now(); 
       let phaseIndexToCheck = -1; 
@@ -660,6 +694,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
           if (isNowCompleted && !wasPhaseCompleted) { 
               setShowConfetti(true);
               setTimeout(() => setShowConfetti(false), 3000);
+              
+              // New Phase Feedback Logic
+              try {
+                  const feedback = await generatePhaseFeedback(phase.phaseName, phase.items, career.title);
+                  setPhaseFeedback({ phaseName: phase.phaseName, feedback });
+              } catch (e) {
+                  console.error("Feedback generation failed", e);
+              }
+              
               const currentWorkDaysLeft = calculateRemainingDays(newRoadmap.phases);
               const currentCalendarDaysLeft = getCalendarDaysRemaining(); 
               const rawDiff = currentCalendarDaysLeft - currentWorkDaysLeft;
@@ -667,7 +710,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
               
               if (diff > 0) setPhaseAdaptationState({ status: 'ahead', diff, phaseIndex: phaseIndexToCheck });
               else if (diff < 0) setPhaseAdaptationState({ status: 'behind', diff: Math.abs(diff), phaseIndex: phaseIndexToCheck });
-              else showToastMsg(`Phase ${phaseIndexToCheck + 1} Completed! You are exactly on track.`);
           } 
       } 
   };
@@ -755,6 +797,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       if (!currentCareerDetails || !roadmap || !roadmap.phases) return; 
       setShowDateStrategyModal(false); 
       setPhaseAdaptationState(null);
+      setPhaseFeedback(null);
       setIsAdapting(true); 
       try { 
           const preservedPhases: RoadmapPhase[] = [];
@@ -882,7 +925,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 flex flex-col justify-between">
                      <div className="mb-6"><h3 className="text-slate-400 font-medium mb-4 flex items-center gap-2"><Target className="h-4 w-4 text-indigo-400" /> Career Progress</h3><div className="flex items-end gap-2 mb-2"><span className="text-5xl font-bold text-white">{progress}%</span><span className="text-sm text-slate-500 mb-1.5">complete</span></div><div className="h-2 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-indigo-500" style={{width: `${progress}%`}}></div></div></div>
                      <div className="space-y-4">
-                         <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between"><div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Days Pending</div><div className="text-xl font-bold text-white">{daysRemaining} Days</div></div><Clock className="h-5 w-5 text-slate-600" /></div>
+                         <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between"><div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Days Left</div><div className="text-xl font-bold text-white">{daysRemaining} Days</div></div><Clock className="h-5 w-5 text-slate-600" /></div>
                          <div className={`p-4 rounded-2xl border flex items-center justify-between ${pacing.status === 'ahead' ? 'bg-emerald-500/10 border-emerald-500/20' : pacing.status === 'behind' ? 'bg-red-500/10 border-red-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}><div><div className={`text-xs font-bold uppercase tracking-wider mb-1 ${pacing.status === 'ahead' ? 'text-emerald-400' : pacing.status === 'behind' ? 'text-red-400' : 'text-blue-400'}`}>Current Pace</div><div className="text-sm font-bold text-white">{pacing.message}</div></div><TrendingUp className="h-5 w-5" /></div>
                      </div>
                  </div>
@@ -1105,11 +1148,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <button onClick={() => setIsChatOpen(!isChatOpen)} className="fixed bottom-24 md:bottom-10 right-4 md:right-10 w-14 h-14 bg-indigo-600 hover:bg-indigo-500 rounded-full shadow-2xl shadow-indigo-500/40 flex items-center justify-center z-[60] transition-transform hover:scale-105 active:scale-95">{isChatOpen ? <X className="h-6 w-6 text-white" /> : <MessageSquare className="h-6 w-6 text-white" />}</button>
       <ChatWindow isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} careerTitle={career.title} history={chatHistory} onSend={handleSendMessage} isTyping={isChatTyping} />
       {showCelebration && <CelebrationModal onClose={() => setShowCelebration(false)} />}
+      {phaseFeedback && <PhaseFeedbackModal phaseName={phaseFeedback.phaseName} feedback={phaseFeedback.feedback} onRedesign={() => { setPhaseAdaptationState({ status: pacing.status === 'behind' ? 'behind' : 'ahead', diff: pacing.days, phaseIndex: -1 }); setPhaseFeedback(null); }} onClose={() => setPhaseFeedback(null)} />}
       {phaseAdaptationState && <PhaseAdaptationModal status={phaseAdaptationState.status} diff={phaseAdaptationState.diff} onOptionSelect={handlePhaseAdaptationOption} onClose={() => setPhaseAdaptationState(null)} />}
       {showFeedbackModal && <FeedbackModal onClose={() => setShowFeedbackModal(false)} text={feedbackText} setText={setFeedbackText} />}
       {confirmAction && <ConfirmationModal action={confirmAction} onConfirm={confirmAction.type === 'reset_all' ? executeResetAll : executeDeleteAccount} onCancel={() => setConfirmAction(null)} />}
       {careerToDelete && <DeleteCareerConfirmationModal onConfirm={executeDeleteCareer} onCancel={() => setCareerToDelete(null)} />}
-      {showDateEditModal && <DeleteCareerConfirmationModal onConfirm={() => {}} onCancel={() => setShowDateEditModal(false)} />}
       {showDateEditModal && <DateEditModal date={pendingTargetDate} setDate={setPendingTargetDate} onConfirm={initiateDateUpdate} onCancel={() => setShowDateEditModal(false)} />}
       {showDateStrategyModal && <DateStrategyModal type={dateStrategyType} onAdapt={(t) => handleAdaptation(t, pendingTargetDate)} onManual={() => handleDateUpdateWithoutAI(pendingTargetDate)} onClose={() => setShowDateStrategyModal(false)} />}
       {isAdapting && <AdaptingOverlay />}
