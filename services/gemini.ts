@@ -152,20 +152,21 @@ export const generateRoadmap = async (
       
       STRICT ARCHITECTURAL RULES:
       1. CRITICAL: You MUST generate EXACTLY ${totalDays} items total in the "items" arrays across all phases. Every item represents EXACTLY 1 day.
-      2. If Duration is high (e.g. 200+ days), keep each "description" and "explanation" extremely concise (max 10-15 words) to ensure all ${totalDays} items fit in the response without truncation.
-      3. Do NOT include day ranges in "phaseName" (e.g. use "Advanced Architectures" instead of "Advanced Architectures (Days 100-140)"). The UI handles day counting.
-      4. Tasks within phases MUST ONLY be of these two types:
+      2. TASK DESCRIPTION QUALITY: Each item's "description" must be informative (20-30 words), explaining exactly WHAT the user will learn or build today and WHY it matters.
+      3. LEARNING REFERENCES: For every single task, you MUST provide 2-3 specific "suggestedResources". These must be real-world high-quality learning links (e.g., YouTube tutorials, official documentation, or reputable courses) that cover the specific goal of that day.
+      4. Do NOT include day ranges in "phaseName" (e.g. use "Advanced Architectures" instead of "Advanced Architectures (Days 100-140)"). The UI handles day counting.
+      5. Tasks within phases MUST ONLY be of these two types:
          - "skill": Learning core concepts or technical topics.
          - "project": Building practical features, MVPs, or scripts.
-      5. The VERY LAST item of the VERY LAST phase MUST be a "Final Capstone Revision & Confidence Project" (type: project). 
-      6. Each task item MUST have:
+      6. The VERY LAST item of the VERY LAST phase MUST be a "Final Capstone Revision & Confidence Project" (type: project). 
+      7. Each task item MUST have:
          {
            "title": "Clear and descriptive task name",
-           "description": "Very short summary",
+           "description": "Informative summary explaining the daily objective",
            "type": "skill" | "project",
            "importance": "high" | "medium" | "low",
-           "explanation": "Brief professional guidance",
-           "suggestedResources": [{"title": "Name", "url": "URL"}]
+           "explanation": "Deep professional guidance on how to approach this task",
+           "suggestedResources": [{"title": "Name of Resource", "url": "Direct Link"}]
          }
       
       Output JSON format: 
