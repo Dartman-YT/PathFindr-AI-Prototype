@@ -204,7 +204,16 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isNewUser = 
       
       try {
           const questions = await generateSkillQuiz(career.title);
-          setSkillQuestions(questions);
+          
+          // Sort questions from beginner to advanced to allow proper calibration progression
+          const difficultyMap: Record<string, number> = { 'beginner': 1, 'intermediate': 2, 'advanced': 3 };
+          const sortedQuestions = [...questions].sort((a, b) => {
+              const levelA = difficultyMap[a.difficulty.toLowerCase()] || 0;
+              const levelB = difficultyMap[b.difficulty.toLowerCase()] || 0;
+              return levelA - levelB;
+          });
+
+          setSkillQuestions(sortedQuestions);
           setQuizStatus('active');
           setCurrentSkillQIndex(0);
       } catch (e) {
@@ -220,6 +229,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isNewUser = 
       
       if (optionIndex !== currentQ.correctIndex) {
           setQuizStatus('failed');
+          // Map calibration failure point to expertise level
           if (currentSkillQIndex <= 1) setDetectedLevel('beginner');
           else if (currentSkillQIndex <= 3) setDetectedLevel('intermediate');
           else setDetectedLevel('advanced');

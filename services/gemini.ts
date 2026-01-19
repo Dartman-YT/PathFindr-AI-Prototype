@@ -349,7 +349,9 @@ export const generateDailyQuiz = async (careerTitle: string): Promise<DailyQuizI
 export const generateSkillQuiz = async (careerTitle: string): Promise<SkillQuestion[]> => {
   const ai = getAI();
   if (!ai) return [];
-  const prompt = `${NOVA_PERSONA} Generate a 5-question skill calibration quiz for: ${careerTitle}. JSON: [{id, question, options[], correctIndex, difficulty}].`;
+  const prompt = `${NOVA_PERSONA} Generate a 5-question skill calibration quiz for: ${careerTitle}. 
+  Ensure a range of difficulties: 2 beginner, 2 intermediate, and 1 advanced question.
+  JSON: [{id, question, options[], correctIndex, difficulty}].`;
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
