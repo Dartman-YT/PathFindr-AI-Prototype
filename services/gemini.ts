@@ -284,13 +284,14 @@ export const fetchTechNews = async (topic: string): Promise<NewsItem[]> => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Search for the latest 20 professional tech news articles, breakthroughs, and industry insights about "${topic}". Provide high-quality news from reliable tech sources.`,
+      contents: `Search for at least 30 the latest professional tech news articles, breakthroughs, job trends, and industry insights about "${topic}". Provide links and diverse sources.`,
       config: { tools: [{ googleSearch: {} }] }
     });
     
-    // Improved source collection: extract from groundingMetadata or fall back to text links
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const newsItems: NewsItem[] = [];
+    
+    // Improved source collection: extract from groundingMetadata
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     
     chunks.forEach((c: any) => {
       if (c.web && c.web.uri && c.web.title) {
@@ -308,7 +309,7 @@ export const fetchTechNews = async (topic: string): Promise<NewsItem[]> => {
         cleanTitle = cleanTitle.replace(/google search|vertexaisearch|internal_id|session_id|google_search_result/gi, "").trim();
         if (cleanTitle.endsWith('-')) cleanTitle = cleanTitle.slice(0, -1).trim();
 
-        if (cleanTitle.length > 10) {
+        if (cleanTitle.length > 10 && !newsItems.some(existing => existing.url === c.web.uri)) {
             newsItems.push({
               title: cleanTitle,
               url: c.web.uri,
@@ -320,8 +321,7 @@ export const fetchTechNews = async (topic: string): Promise<NewsItem[]> => {
       }
     });
 
-    // If chunks are empty, it's possible metadata didn't populate. Fallback to basic search entry if available.
-    return newsItems.slice(0, 20);
+    return newsItems;
   } catch (e) {
     console.error("News fetch failed", e);
     return [];
@@ -334,14 +334,33 @@ export const generateDailyQuiz = async (careerTitle: string): Promise<DailyQuizI
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Create one high-quality technical MCQ for a ${careerTitle} professional. 
-      STRICT REQUIREMENT: The "correctIndex" MUST be a number between 0 and 3.
+      contents: `Create one high-quality technical multiple-choice question for a professional pursuing a career as a ${careerTitle}. 
+      The question should be challenging and industry-relevant.
       
-      JSON Structure: { "question": "string", "options": ["string", "string", "string", "string"], "correctIndex": number, "explanation": "string" }`,
-      config: { responseMimeType: "application/json" }
+      STRICT JSON RESPONSE:
+      {
+        "question": "The text of the question",
+        "options": ["Option A", "Option B", "Option C", "Option D"],
+        "correctIndex": 0,
+        "explanation": "A concise explanation of why the correct option is right"
+      }`,
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            question: { type: Type.STRING },
+            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+            correctIndex: { type: Type.INTEGER },
+            explanation: { type: Type.STRING }
+          },
+          required: ["question", "options", "correctIndex", "explanation"]
+        }
+      }
     });
     return JSON.parse(cleanJsonString(response.text || 'null'));
   } catch (e) {
+    console.error("Daily quiz generation failed", e);
     return null;
   }
 };
