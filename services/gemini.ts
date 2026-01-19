@@ -152,28 +152,16 @@ export const generateRoadmap = async (
       
       STRICT ARCHITECTURAL RULES:
       1. CRITICAL: You MUST generate EXACTLY ${totalDays} items total in the "items" arrays across all phases. Every item represents EXACTLY 1 day.
-      2. TASK DESCRIPTION QUALITY: Each item's "description" must be informative (20-30 words), explaining exactly WHAT the user will learn or build today and WHY it matters.
-      3. LEARNING REFERENCES: For every single task, you MUST provide 2-3 specific "suggestedResources". These must be real-world high-quality learning links (e.g., YouTube tutorials, official documentation, or reputable courses) that cover the specific goal of that day.
-      4. Do NOT include day ranges in "phaseName" (e.g. use "Advanced Architectures" instead of "Advanced Architectures (Days 100-140)"). The UI handles day counting.
-      5. Tasks within phases MUST ONLY be of these two types:
-         - "skill": Learning core concepts or technical topics.
-         - "project": Building practical features, MVPs, or scripts.
-      6. The VERY LAST item of the VERY LAST phase MUST be a "Final Capstone Revision & Confidence Project" (type: project). 
-      7. Each task item MUST have:
-         {
-           "title": "Clear and descriptive task name",
-           "description": "Informative summary explaining the daily objective",
-           "type": "skill" | "project",
-           "importance": "high" | "medium" | "low",
-           "explanation": "Deep professional guidance on how to approach this task",
-           "suggestedResources": [{"title": "Name of Resource", "url": "Direct Link"}]
-         }
+      2. TASK QUALITY: Each item's "description" must be an informative briefing (25-35 words), explaining exactly WHAT the user will learn/build and WHY it is foundational.
+      3. LEARNING REFERENCES: For EVERY task, provide 2-3 verified, specific learning resources. Use YouTube, official docs, or top-tier blogs.
+      4. LINK VALIDITY: All links for Certificates and Internships MUST be high-quality, non-placeholder URLs from major platforms (e.g., Coursera, edX, LinkedIn, Indeed, Glassdoor, or official corporate careers pages).
+      5. The VERY LAST item of the VERY LAST phase MUST be a "Final Capstone Revision & Confidence Project" (type: project). 
       
       Output JSON format: 
       {
         "phases": [{ "phaseName": "Phase Title", "items": [...] }],
-        "recommendedCertificates": [{ "title": "Cert Name", "provider": "Coursera/AWS/etc", "url": "URL", "relevance": "Why this cert?" }],
-        "recommendedInternships": [{ "title": "Role Name", "company": "Example Corp", "url": "URL", "description": "Short summary" }]
+        "recommendedCertificates": [{ "title": "Real Certificate Name", "provider": "Coursera/AWS/Google", "url": "VALID_PLATFORM_URL", "relevance": "Why this specific cert?" }],
+        "recommendedInternships": [{ "title": "Role Name", "company": "Real Company or Platform", "url": "VALID_PLATFORM_JOB_BOARD_URL", "description": "Short summary of opportunities" }]
       }
     `;
 
