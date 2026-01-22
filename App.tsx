@@ -13,9 +13,11 @@ import {
     saveRoadmap,
     setCurrentUser,
     deleteUser,
-    savePracticeData
+    savePracticeData,
+    saveDailyQuizCache,
+    saveNewsCache
 } from './services/store';
-import { generateRoadmap, generatePracticeDataBatch } from './services/gemini';
+import { generateRoadmap, generateKnowledgeBatch } from './services/gemini';
 import { Sparkles, Search, X, Compass } from 'lucide-react';
 
 const SplashScreen = () => (
@@ -63,14 +65,12 @@ const App: React.FC = () => {
   const loadCareerContext = (userId: string, careerId: string) => {
       const savedCareer = getCareerData(userId, careerId);
       const savedRoadmap = getRoadmap(userId, careerId);
-      
       setCareer(savedCareer);
       setRoadmap(savedRoadmap || null);
   };
 
   useEffect(() => {
     const splashTimer = setTimeout(() => setShowSplash(false), 3000);
-
     const userId = getCurrentUserId();
     if (userId) {
       const users = getUsers();
@@ -108,7 +108,7 @@ const App: React.FC = () => {
         focusAreas: focusAreas
     };
 
-    const updatedCareers = user.activeCareers ? [...user.activeCareers, newCareerEntry] : [newCareerEntry];
+    const updatedCareers = [...(user.activeCareers || []), newCareerEntry];
     const updatedUser = { 
         ...user, 
         onboardingComplete: true,
@@ -127,17 +127,23 @@ const App: React.FC = () => {
     saveCareerData(user.id, selectedCareer.id, selectedCareer);
 
     try {
-        const [generatedRoadmap, practiceData] = await Promise.all([
-            generateRoadmap(selectedCareer.title, eduYear, targetDate, expLevel, focusAreas),
-            generatePracticeDataBatch(selectedCareer.title)
-        ]);
-        
+        // CALL 1: GENERATE ROADMAP (First priority for UI)
+        const generatedRoadmap = await generateRoadmap(selectedCareer.title, eduYear, targetDate, expLevel, focusAreas);
         setRoadmap(generatedRoadmap);
         saveRoadmap(user.id, selectedCareer.id, generatedRoadmap);
-        savePracticeData(user.id, selectedCareer.id, practiceData);
+
+        // CALL 2: CONSOLIDATED KNOWLEDGE BATCH (Secondary background data)
+        const batch = await generateKnowledgeBatch(selectedCareer.title);
+        saveDailyQuizCache(user.id, selectedCareer.id, batch.dailyQuiz);
+        saveNewsCache(user.id, selectedCareer.id, batch.news);
+        savePracticeData(user.id, selectedCareer.id, {
+            topics: batch.topics,
+            questions: batch.practiceQuestions,
+            interviews: batch.interviewQuestions
+        });
+        
     } catch (e) {
         console.error("Context generation failed", e);
-        // Fix: Added missing recommendedInternships property to satisfy the RoadmapData interface
         setRoadmap({ phases: [], recommendedCertificates: [], recommendedInternships: [] });
     }
   };
@@ -158,8 +164,7 @@ const App: React.FC = () => {
 
   const handleAddCareerRequest = (mode?: 'analysis' | 'search') => {
       setIsAddingCareer(true);
-      if (mode) setAddCareerMode(mode);
-      else setAddCareerMode(null);
+      setAddCareerMode(mode || null);
       setCareer(null); 
   };
 
@@ -185,17 +190,11 @@ const App: React.FC = () => {
                   <div className="grid gap-4">
                       <button onClick={() => setAddCareerMode('analysis')} className="flex items-center gap-4 p-6 bg-slate-800/50 border border-slate-700 rounded-2xl hover:border-indigo-500 hover:bg-indigo-900/10 transition-all group text-left">
                           <div className="p-3 bg-indigo-500/20 rounded-xl text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors"><Sparkles className="h-6 w-6" /></div>
-                          <div>
-                              <div className="font-bold text-white text-lg">AI Personality Analysis</div>
-                              <div className="text-slate-400 text-sm">Let Nova discover the perfect career.</div>
-                          </div>
+                          <div><div className="font-bold text-white text-lg">AI Personality Analysis</div><div className="text-slate-400 text-sm">Let Nova discover the perfect career.</div></div>
                       </button>
                       <button onClick={() => setAddCareerMode('search')} className="flex items-center gap-4 p-6 bg-slate-800/50 border border-slate-700 rounded-2xl hover:border-emerald-500 hover:bg-emerald-900/10 transition-all group text-left">
                           <div className="p-3 bg-emerald-500/20 rounded-xl text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Search className="h-6 w-6" /></div>
-                          <div>
-                              <div className="font-bold text-white text-lg">Manual Search</div>
-                              <div className="text-slate-400 text-sm">Select a specific career path.</div>
-                          </div>
+                          <div><div className="font-bold text-white text-lg">Manual Search</div><div className="text-slate-400 text-sm">Select a specific career path.</div></div>
                       </button>
                   </div>
               </div>
@@ -203,23 +202,16 @@ const App: React.FC = () => {
       );
   }
 
-  const showOnboarding = !user.onboardingComplete || (isAddingCareer && addCareerMode);
-  if (showOnboarding) return <Onboarding onComplete={handleOnboardingComplete} isNewUser={!user.onboardingComplete} mode={addCareerMode || 'analysis'} />;
-  
+  if (!user.onboardingComplete || (isAddingCareer && addCareerMode)) {
+      return <Onboarding onComplete={handleOnboardingComplete} isNewUser={!user.onboardingComplete} mode={addCareerMode || 'analysis'} />;
+  }
+
   if (!career && user.activeCareers.length > 0) {
       loadCareerContext(user.id, user.activeCareers[0].careerId);
       return <div className="min-h-screen flex items-center justify-center bg-slate-950 text-indigo-500">Loading Career...</div>;
   }
 
   if (!career) return <Onboarding onComplete={handleOnboardingComplete} isNewUser={false} />;
-
-  const handleUpdateRoadmap = (updatedPhases: RoadmapPhase[]) => {
-      if (roadmap) {
-          const newData = { ...roadmap, phases: updatedPhases };
-          setRoadmap(newData);
-          saveRoadmap(user.id, career.id, newData);
-      }
-  };
 
   return (
     <Dashboard 
