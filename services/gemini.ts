@@ -25,29 +25,16 @@ const cleanJsonString = (str: string): string => {
   return cleaned;
 };
 
-const getAI = () => {
-  try {
-    if (!process.env.API_KEY) throw new Error("Missing API Key");
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
-  } catch (e) {
-    return null;
-  }
-};
-
 const NOVA_PERSONA = `
   You are "Nova", a world-class AI Career Architect and Psychologist. 
-  Your personality is futuristic, encouraging, analytical, and structured. 
-  You use industry data and psychological profiling to architect careers.
+  Your personality is futuristic, encouraging, analytical, and highly structured. 
+  You specialize in matching obscure psychological traits to high-growth industry roles in the 2024-2025 economy.
 `;
 
 export const calculateRemainingDays = (phases: RoadmapPhase[]): number => {
   return phases.reduce((acc, phase) => acc + (phase.items?.filter(item => item.status === 'pending').length || 0), 0);
 };
 
-/**
- * CALL 1: Roadmap Generation
- * High complexity, prioritized for core UI.
- */
 export const generateRoadmap = async (
   careerTitle: string,
   eduYear: string,
@@ -55,9 +42,12 @@ export const generateRoadmap = async (
   expLevel: string,
   focusAreas: string
 ): Promise<RoadmapData> => {
-  const ai = getAI();
-  if (!ai) return { phases: [], recommendedCertificates: [], recommendedInternships: [] };
+  if (!process.env.API_KEY) {
+    console.error("CRITICAL: API_KEY is missing from environment.");
+    return { phases: [], recommendedCertificates: [], recommendedInternships: [] };
+  }
 
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const start = new Date();
   start.setHours(12, 0, 0, 0);
   let totalDays = 30;
@@ -114,14 +104,11 @@ export const generateRoadmap = async (
       recommendedInternships: data.recommendedInternships || []
     };
   } catch (e) {
+    console.error("Roadmap Generation Error:", e);
     return { phases: [], recommendedCertificates: [], recommendedInternships: [] };
   }
 };
 
-/**
- * CALL 2: Knowledge Batch
- * Consolidates all secondary data to save rate limits.
- */
 export const generateKnowledgeBatch = async (careerTitle: string): Promise<{
     dailyQuiz: DailyQuizItem;
     practiceQuestions: PracticeQuestion[];
@@ -129,9 +116,9 @@ export const generateKnowledgeBatch = async (careerTitle: string): Promise<{
     news: NewsItem[];
     topics: string[];
 }> => {
-    const ai = getAI();
-    if (!ai) throw new Error("AI Offline");
+    if (!process.env.API_KEY) throw new Error("API_KEY missing");
 
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `
         ${NOVA_PERSONA}
         Generate an industry data batch for: "${careerTitle}".
@@ -179,26 +166,40 @@ export const generateKnowledgeBatch = async (careerTitle: string): Promise<{
             news: data.news || []
         };
     } catch (e) {
+        console.error("Knowledge Batch Error:", e);
         throw e;
     }
 };
 
 export const analyzeInterests = async (inputs: any[], comment: string, excluded: string[] = []): Promise<CareerOption[]> => {
-  const ai = getAI();
-  if (!ai) return [];
+  if (!process.env.API_KEY) return [];
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const prompt = `
+    ${NOVA_PERSONA}
+    Analyze the following psychometric profile and user feedback to suggest exactly 3-6 optimal career paths for 2025.
+    
+    User Inputs: ${JSON.stringify(inputs)}
+    Additional Context/Feedback: "${comment}"
+    Excluded Titles (User already rejected these): ${excluded.join(', ')}
+    
+    Return ONLY a JSON array: [{id, title, description, fitScore, reason}]
+  `;
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
-      contents: `${NOVA_PERSONA} Analyze profile: ${JSON.stringify(inputs)}. Context: ${comment}. Exclude: ${excluded.join(', ')}. JSON: [{id, title, description, fitScore, reason}]`,
+      contents: prompt,
       config: { responseMimeType: "application/json" },
     });
     return JSON.parse(cleanJsonString(response.text || "[]"));
-  } catch (e) { return []; }
+  } catch (e) { 
+    console.error("Interest Analysis Error:", e);
+    return []; 
+  }
 };
 
 export const searchCareers = async (query: string): Promise<CareerOption[]> => {
-  const ai = getAI();
-  if (!ai) return [];
+  if (!process.env.API_KEY) return [];
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -210,8 +211,8 @@ export const searchCareers = async (query: string): Promise<CareerOption[]> => {
 };
 
 export const generateSkillQuiz = async (career: string): Promise<SkillQuestion[]> => {
-  const ai = getAI();
-  if (!ai) return [];
+  if (!process.env.API_KEY) return [];
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -223,7 +224,8 @@ export const generateSkillQuiz = async (career: string): Promise<SkillQuestion[]
 };
 
 export const generateSimulationScenario = async (career: string): Promise<SimulationScenario> => {
-  const ai = getAI();
+  if (!process.env.API_KEY) throw new Error("API Key missing");
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Simulation for ${career}. JSON: {id, scenario, question, options[4], correctIndex, explanation}`,
@@ -233,16 +235,15 @@ export const generateSimulationScenario = async (career: string): Promise<Simula
 };
 
 export const generateChatResponse = async (message: string, career: string, history: ChatMessage[], context?: string): Promise<string> => {
-  const ai = getAI();
-  if (!ai) return "Offline.";
+  if (!process.env.API_KEY) return "AI Configuration Missing.";
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const prompt = `System: ${NOVA_PERSONA} Focus: ${career}. Context: ${context}. History: ${JSON.stringify(history.slice(-3))}. User: ${message}`;
   try {
     const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
     return response.text || "Busy.";
-  } catch (e) { return "Error."; }
+  } catch (e) { return "Deployment Error."; }
 };
 
-// Legacy stubs to prevent import errors
 export const fetchTechNews = async (t: string) => [];
 export const generateDailyQuiz = async (c: string) => null;
 export const generatePracticeTopics = async (c: string) => [];

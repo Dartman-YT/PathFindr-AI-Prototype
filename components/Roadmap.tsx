@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { RoadmapPhase, UserProfile, RoadmapItem, RoadmapData } from '../types';
 import { Subscription } from './Subscription';
-import { CheckCircle2, Circle, ExternalLink, Briefcase, Award, Zap, Clock, ChevronDown, ChevronUp, Lock, Search, Target as TargetIcon, Boxes, GraduationCap, Sparkles, LayoutGrid, Calendar, ChevronRight, Info, PlayCircle, Youtube } from 'lucide-react';
+import { CheckCircle2, Circle, ExternalLink, Briefcase, Award, Zap, Clock, ChevronDown, ChevronUp, Lock, Search, Target as TargetIcon, Boxes, GraduationCap, Sparkles, LayoutGrid, Calendar, ChevronRight, Info, PlayCircle, Youtube, AlertTriangle } from 'lucide-react';
 
 interface PacingStatus {
     status: 'ahead' | 'behind' | 'on-track' | 'critical';
@@ -69,7 +69,6 @@ export const Roadmap: React.FC<RoadmapProps> = ({
   useEffect(() => {
     if (currentTask && viewMode === 'timeline') {
         setSelectedTaskId(currentTask.id);
-        // Optional: Scroll to current task in the timeline
     }
   }, [currentTask, viewMode]);
 
@@ -114,13 +113,22 @@ export const Roadmap: React.FC<RoadmapProps> = ({
       return matchesCategory() && matchesSearch();
   };
 
-  if (isLoading || !roadmap) return (
+  if (isLoading) return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 animate-fade-in w-full">
            <Zap className="h-12 w-12 text-indigo-400 animate-pulse" />
-           <h3 className="text-xl font-bold text-white mb-2 tracking-tighter">SYNCHRONIZING PATHS...</h3>
+           <h3 className="text-xl font-bold text-white mb-2 tracking-tighter uppercase">Synchronizing Neural Paths...</h3>
            <div className="w-48 h-1 bg-slate-900 rounded-full overflow-hidden">
                <div className="h-full bg-indigo-500 animate-[loading_2s_ease-in-out_infinite]"></div>
            </div>
+      </div>
+  );
+
+  if (!roadmap || phases.length === 0) return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-slate-900/40 border border-slate-800 rounded-[3rem] border-dashed">
+          <AlertTriangle className="h-12 w-12 text-amber-500 mb-6" />
+          <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">Neural Link Offline</h3>
+          <p className="text-slate-400 max-w-sm mb-8">Nova was unable to architect your roadmap. This usually happens if the AI configuration is missing or restricted in your deployment environment.</p>
+          <div className="text-[10px] text-slate-600 font-black uppercase tracking-[0.2em]">Check console for error diagnostics</div>
       </div>
   );
 
