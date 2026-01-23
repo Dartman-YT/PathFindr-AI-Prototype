@@ -20,7 +20,7 @@ interface DashboardProps {
 const PracticeQuestionCard: React.FC<{ question: PracticeQuestion, index: number }> = ({ question, index }) => {
     const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
     const handleSelect = (idx: number) => { if (selectedIdx !== null) return; setSelectedIdx(idx); };
-    const correctIdx = Number(question.correctIndex);
+    const correctIdx = question.correctIndex;
     const isAnswered = selectedIdx !== null;
     const isUserCorrect = selectedIdx === correctIdx;
     return (
@@ -52,56 +52,6 @@ const CountdownTimer = () => {
     return <span className="text-white font-mono font-bold tracking-widest">{timeLeft}</span>;
 };
 
-const FormattedText: React.FC<{ text: string }> = ({ text }) => {
-  const lines = text.split('\n');
-  
-  return (
-    <div className="space-y-2">
-      {lines.map((line, i) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <div key={i} className="h-2" />;
-
-        // Handle Headings (###)
-        if (trimmed.startsWith('### ')) {
-          return (
-            <h4 key={i} className="text-indigo-400 font-black text-sm uppercase tracking-widest mt-4 mb-2">
-              {trimmed.substring(4)}
-            </h4>
-          );
-        }
-
-        // Handle Bullets
-        const isBullet = trimmed.startsWith('* ') || trimmed.startsWith('- ');
-        const cleanLine = isBullet ? trimmed.substring(2) : trimmed;
-
-        // Handle Bold (**text**)
-        const parts = cleanLine.split(/(\*\*.*?\*\*)/g);
-        const content = parts.map((part, j) => {
-          if (part.startsWith('**') && part.endsWith('**')) {
-            return <strong key={j} className="font-black text-white">{part.slice(2, -2)}</strong>;
-          }
-          return part;
-        });
-
-        if (isBullet) {
-          return (
-            <div key={i} className="flex gap-2 pl-1">
-              <span className="text-indigo-500 font-black">•</span>
-              <span className="text-slate-300 text-sm leading-relaxed">{content}</span>
-            </div>
-          );
-        }
-
-        return (
-          <p key={i} className="text-slate-300 text-sm leading-relaxed">
-            {content}
-          </p>
-        );
-      })}
-    </div>
-  );
-};
-
 const ChatWindow: React.FC<{ isOpen: boolean; onClose: () => void; careerTitle: string; history: ChatMessage[]; onSend: (msg: string) => void; isTyping: boolean }> = ({ isOpen, onClose, careerTitle, history, onSend, isTyping }) => {
     const [input, setInput] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -110,26 +60,8 @@ const ChatWindow: React.FC<{ isOpen: boolean; onClose: () => void; careerTitle: 
     return (
         <div className="fixed bottom-24 md:bottom-10 right-4 md:right-10 w-80 md:w-96 h-[500px] bg-slate-900 border border-indigo-500/30 rounded-3xl shadow-2xl flex flex-col overflow-hidden z-[70] animate-fade-in">
             <div className="bg-slate-950 p-4 border-b border-slate-800 flex justify-between items-center"><div className="flex items-center gap-2"><div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400"><MessageSquare className="h-5 w-5" /></div><div><h3 className="font-bold text-white text-sm">Nova Support</h3><p className="text-xs text-slate-500">Online</p></div></div><button onClick={onClose} className="p-1 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white"><X className="h-5 w-5" /></button></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/50">
-              {history.map(msg => (
-                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] p-3.5 rounded-2xl ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none text-sm' : 'bg-slate-800 text-slate-200 rounded-tl-none shadow-lg shadow-black/20'}`}>
-                    <FormattedText text={msg.text} />
-                  </div>
-                </div>
-              ))}
-              {isTyping && (
-                <div className="flex justify-start">
-                  <div className="bg-slate-800 p-3 rounded-2xl rounded-tl-none text-slate-400 text-xs flex items-center gap-1 shadow-md">
-                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
-                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce delay-100"></span>
-                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce delay-200"></span>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-            <div className="p-4 bg-slate-950 border-t border-slate-800"><div className="flex gap-2"><input type="text" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !isTyping && input.trim() && (onSend(input), setInput(''))} placeholder="Ask about your current task..." className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none" /><button onClick={() => { if(input.trim()) { onSend(input); setInput(''); }}} disabled={!input.trim() || isTyping} className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white disabled:opacity-50 transition-colors"><Send className="h-5 w-5" /></button></div></div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/50">{history.map(msg => (<div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 rounded-tl-none'}`}>{msg.text.split('\n').map((line, i) => <p key={i} className={i > 0 ? "mt-2" : ""}>{line}</p>)}</div></div>))}{isTyping && (<div className="flex justify-start"><div className="bg-slate-800 p-3 rounded-2xl rounded-tl-none text-slate-400 text-xs flex items-center gap-1"><span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce"></span><span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce delay-100"></span><span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce delay-200"></span></div></div>)}<div ref={messagesEndRef} /></div>
+            <div className="p-4 bg-slate-950 border-t border-slate-800"><div className="flex gap-2"><input type="text" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !isTyping && input.trim() && (onSend(input), setInput(''))} placeholder="Type a message..." className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none" /><button onClick={() => { if(input.trim()) { onSend(input); setInput(''); }}} disabled={!input.trim() || isTyping} className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white disabled:opacity-50"><Send className="h-5 w-5" /></button></div></div>
         </div>
     );
 };
@@ -137,35 +69,6 @@ const ChatWindow: React.FC<{ isOpen: boolean; onClose: () => void; careerTitle: 
 const QuestionSkeletonCard = () => (<div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 animate-pulse"><div className="h-4 bg-slate-800 rounded w-3/4 mb-6"></div><div className="space-y-3"><div className="h-10 bg-slate-800 rounded-xl"></div><div className="h-10 bg-slate-800 rounded-xl"></div><div className="h-10 bg-slate-800 rounded-xl"></div><div className="h-10 bg-slate-800 rounded-xl"></div></div></div>);
 const InterviewSkeletonCard = () => (<div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 animate-pulse"><div className="flex justify-between items-start mb-4"><div className="h-4 bg-slate-800 rounded w-24"></div></div><div className="h-5 bg-slate-800 rounded w-full mb-6"></div><div className="h-10 bg-slate-800 rounded-xl"></div></div>);
 const CelebrationModal = ({ onClose }: { onClose: () => void }) => (<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}><div className="text-center pointer-events-auto bg-slate-900 border border-yellow-500/30 p-8 rounded-3xl shadow-2xl relative overflow-hidden"><div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-purple-500/10"></div><div className="relative z-10"><div className="text-6xl mb-6 animate-bounce">🏆</div><h2 className="text-3xl font-bold text-white mb-2">Congratulations!</h2><p className="text-slate-300 mb-8">You've completed the entire roadmap!</p><button onClick={onClose} className="px-8 py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-200 transition-colors">Continue</button></div></div></div>);
-
-const PhaseFeedbackModal = ({ phaseName, feedback, isAhead, onClose }: { phaseName: string, feedback: string, isAhead: boolean, onClose: () => void }) => (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
-        <div className="bg-slate-900 border border-indigo-500/40 p-8 rounded-[2.5rem] max-w-lg w-full shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-5">
-                <Trophy className="h-40 w-40 text-indigo-400" />
-            </div>
-            <div className="relative z-10">
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="p-3 bg-indigo-500/20 rounded-2xl text-indigo-400">
-                        <Star className="h-8 w-8" />
-                    </div>
-                    <div>
-                        <h2 className="text-2xl font-black text-white leading-tight">Phase Mastery Complete</h2>
-                        <p className="text-indigo-400 text-xs font-black uppercase tracking-widest">{phaseName} Achieved</p>
-                    </div>
-                </div>
-                <div className="bg-slate-950/60 p-6 rounded-3xl border border-slate-800 mb-8">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Milestone Summary</h4>
-                    <p className="text-slate-200 leading-relaxed text-sm">{feedback}</p>
-                </div>
-                <button onClick={onClose} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 group">
-                    {isAhead ? "I'm unstoppable, keep it up!" : "I've got this, let's keep pushing!"}
-                    <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                </button>
-            </div>
-        </div>
-    </div>
-);
 
 const PhaseAdaptationModal = ({ status, diff, onOptionSelect, onClose }: { status: 'ahead' | 'behind', diff: number, onOptionSelect: (option: string) => void, onClose: () => void }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
@@ -198,7 +101,7 @@ const PhaseAdaptationModal = ({ status, diff, onOptionSelect, onClose }: { statu
 
 const FeedbackModal = ({ onClose, text, setText }: { onClose: () => void, text: string, setText: (s: string) => void }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-md w-full shadow-2xl">
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-w-md w-full shadow-2xl">
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-white">Send Feedback</h2>
                 <button onClick={onClose}><X className="h-5 w-5 text-slate-500" /></button>
@@ -342,7 +245,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isAdapting, setIsAdapting] = useState(false);
   const [phaseAdaptationState, setPhaseAdaptationState] = useState<{status: 'ahead'|'behind', diff: number, phaseIndex: number} | null>(null);
-  const [phaseFeedback, setPhaseFeedback] = useState<{ phaseName: string, feedback: string, isAhead: boolean } | null>(null);
 
   const [showDateEditModal, setShowDateEditModal] = useState(false);
   const [pendingTargetDate, setPendingTargetDate] = useState('');
@@ -389,18 +291,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', text, timestamp: Date.now() }; 
       setChatHistory(prev => [...prev, userMsg]); 
       setIsChatTyping(true); 
-
-      // Find the next pending task to give Nova context
-      const nextTask = roadmap?.phases
-          .flatMap(p => p.items)
-          .find(item => item.status === 'pending');
-      
-      const taskContext = nextTask 
-          ? `User's current priority task: "${nextTask.title}". Description: ${nextTask.description}. Architectural guidance for this task: ${nextTask.explanation || 'Directly relevant to career growth.'}` 
-          : "User has completed all tasks in the current roadmap phases.";
-
       try { 
-          const responseText = await generateChatResponse(text, career.title, chatHistory, taskContext); 
+          const responseText = await generateChatResponse(text, career.title, chatHistory); 
           const botMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'bot', text: responseText, timestamp: Date.now() }; 
           setChatHistory(prev => [...prev, botMsg]); 
       } catch (e) { 
@@ -516,14 +408,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
       } catch(e) { console.error(e); } finally { setIsLoadingMore(false); } 
   };
 
-  const handleLoadMoreInterview = async (mode: string) => { 
+  const handleLoadMoreInterview = async () => { 
       setIsLoadingMore(true); 
       try { 
-          const newQs = await generateCompanyInterviewQuestions(career.title, mode); 
-          const updatedBank = { ...interviewQuestionBank, [mode]: [...(interviewQuestionBank[mode] || []), ...newQs] }; 
+          const currentMode = companyFilter === 'All' ? 'Startups' : companyFilter;
+          const newQs = await generateCompanyInterviewQuestions(career.title, currentMode); 
+          const existingForFilter = interviewQuestionBank[currentMode] || [];
+          const updatedForFilter = [...existingForFilter, ...newQs];
+          const updatedBank = { ...interviewQuestionBank, [currentMode]: updatedForFilter };
           setInterviewQuestionBank(updatedBank); 
           savePracticeData(user.id, career.id, { interviews: updatedBank }); 
-          showToastMsg(`Added new ${mode} questions to local bank.`);
+          showToastMsg(`Added new ${currentMode} questions to local bank.`);
       } catch(e) { console.error(e); } finally { setIsLoadingMore(false); } 
   };
 
@@ -582,7 +477,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const handleQuizAnswer = (index: number) => { 
       if (!dailyQuiz || selectedQuizOption !== null) return; 
       setSelectedQuizOption(index); 
-      const isRight = index === Number(dailyQuiz.correctIndex); 
+      const isRight = index === dailyQuiz.correctIndex; 
       setIsQuizCorrect(isRight); 
       const today = new Date().toISOString().split('T')[0]; 
       const updatedActiveCareers = user.activeCareers.map(c => c.careerId === career.id ? { ...c, lastQuizDate: today } : c); 
@@ -601,8 +496,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           setUser(updatedUser); 
           saveUser(updatedUser); 
       } 
-      // Delay switch to completed to let user read the explanation on the same screen
-      setTimeout(() => setQuizState('completed'), 5000); 
+      setTimeout(() => setQuizState('completed'), 2000); 
   };
 
   const handleSimulationSearch = async () => { 
@@ -643,11 +537,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
       today.setHours(12, 0, 0, 0);
       const diffTime = targetDate.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return Math.max(0, diffDays + 1);
+      return diffDays + 1;
   };
 
   const workDaysLeft = roadmap?.phases ? calculateRemainingDays(roadmap.phases) : 0;
-  const tasksLeftCount = roadmap?.phases ? roadmap.phases.reduce((acc, p) => acc + p.items.filter(i => i.status !== 'completed').length, 0) : 0;
+  const daysRemaining = workDaysLeft; 
 
   const getPacingStatus = () => {
       if (!currentCareerDetails || !roadmap) return { status: 'on-track', days: 0, message: 'On track' } as const;
@@ -661,7 +555,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   
   const pacing = getPacingStatus();
 
-  const handleProgress = async (itemId: string) => { 
+  const handleProgress = (itemId: string) => { 
       if (!roadmap || !roadmap.phases) return; 
       const now = Date.now(); 
       let phaseIndexToCheck = -1; 
@@ -691,24 +585,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           if (isNowCompleted && !wasPhaseCompleted) { 
               setShowConfetti(true);
               setTimeout(() => setShowConfetti(false), 3000);
-              
               const currentWorkDaysLeft = calculateRemainingDays(newRoadmap.phases);
               const currentCalendarDaysLeft = getCalendarDaysRemaining(); 
               const rawDiff = currentCalendarDaysLeft - currentWorkDaysLeft;
               const diff = rawDiff > 0 ? rawDiff - 1 : rawDiff;
-
-              // Local Phase Mastery Feedback
-              const totalPhaseTasks = phase.items.length;
-              const topSkills = phase.items.filter(it => it.type === 'skill').map(it => it.title).slice(0, 2);
-              const hasProject = phase.items.some(it => it.type === 'project');
-              const progressVerdict = diff > 0 ? "ahead of schedule" : diff < 0 ? "operating with deep focus (behind schedule)" : "at a consistent pace";
-              
-              const feedbackStr = `Completed ${totalPhaseTasks} milestones in ${phase.phaseName}, mastering ${topSkills.join(', ')}${hasProject ? ' and technical buildouts' : ''}. You are currently ${progressVerdict}.`;
-              
-              setPhaseFeedback({ phaseName: phase.phaseName, feedback: feedbackStr, isAhead: diff >= 0 });
               
               if (diff > 0) setPhaseAdaptationState({ status: 'ahead', diff, phaseIndex: phaseIndexToCheck });
               else if (diff < 0) setPhaseAdaptationState({ status: 'behind', diff: Math.abs(diff), phaseIndex: phaseIndexToCheck });
+              else showToastMsg(`Phase ${phaseIndexToCheck + 1} Completed! You are exactly on track.`);
           } 
       } 
   };
@@ -796,7 +680,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       if (!currentCareerDetails || !roadmap || !roadmap.phases) return; 
       setShowDateStrategyModal(false); 
       setPhaseAdaptationState(null);
-      setPhaseFeedback(null);
       setIsAdapting(true); 
       try { 
           const preservedPhases: RoadmapPhase[] = [];
@@ -872,7 +755,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
-        const calendarDaysLeft = getCalendarDaysRemaining();
         return (
           <div className="space-y-8 animate-fade-in pb-10">
             <header className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
@@ -917,58 +799,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                          <div className="animate-fade-in">
                              <h3 className="text-lg md:text-xl font-bold text-white mb-6 leading-relaxed">{dailyQuiz.question}</h3>
                              <div className="grid grid-cols-1 gap-3">
-                                 {dailyQuiz.options?.map((opt, i) => {
-                                     const correctIdxNumber = Number(dailyQuiz.correctIndex);
-                                     const isCorrect = i === correctIdxNumber;
-                                     const isSelected = i === selectedQuizOption;
-                                     const hasSelected = selectedQuizOption !== null;
-                                     
-                                     let btnClass = "w-full text-left p-4 rounded-xl border transition-all flex justify-between items-center ";
-                                     let icon = null;
-
-                                     if (hasSelected) {
-                                         if (isCorrect) {
-                                             btnClass += "bg-emerald-500/20 border-emerald-500 text-white ring-1 ring-emerald-500/50";
-                                             icon = <CheckCircle2 className="h-5 w-5 text-emerald-400" />;
-                                         } else if (isSelected) {
-                                             btnClass += "bg-red-500/20 border-red-500 text-white ring-1 ring-red-500/50";
-                                             icon = <AlertCircle className="h-5 w-5 text-red-400" />;
-                                         } else {
-                                             btnClass += "bg-slate-900 border-slate-800 text-slate-500 opacity-50";
-                                         }
-                                     } else {
-                                         btnClass += "bg-slate-900/50 border-slate-700 text-slate-200 hover:bg-indigo-900/30 hover:border-indigo-500 hover:text-white";
-                                     }
-
-                                     return (
-                                         <button key={i} onClick={() => handleQuizAnswer(i)} disabled={hasSelected} className={btnClass}>
-                                             <div className="flex items-center gap-3">
-                                                 <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold ${hasSelected && isCorrect ? 'bg-emerald-500 border-emerald-500 text-slate-950' : hasSelected && isSelected && !isCorrect ? 'bg-red-500 border-red-500 text-white' : 'border-slate-600 text-slate-400'}`}>
-                                                     {['A','B','C','D'][i]}
-                                                 </div>
-                                                 {opt}
-                                             </div>
-                                             {icon}
-                                         </button>
-                                     );
-                                 })}
+                                 {dailyQuiz.options?.map((opt, i) => <button key={i} onClick={() => handleQuizAnswer(i)} disabled={selectedQuizOption !== null} className={`w-full text-left p-4 rounded-xl border transition-all ${selectedQuizOption !== null ? i === dailyQuiz.correctIndex ? 'bg-emerald-500/20 border-emerald-500 text-white' : i === selectedQuizOption ? 'bg-red-500/20 border-red-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500 opacity-50' : 'bg-slate-900/50 border-slate-700 text-slate-200 hover:bg-indigo-900/30 hover:border-indigo-500 hover:text-white'}`}><div className="flex items-center gap-3"><div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold ${selectedQuizOption !== null && i === dailyQuiz.correctIndex ? 'bg-emerald-500 border-emerald-500 text-slate-950' : 'border-slate-600 text-slate-400'}`}>{['A','B','C','D'][i]}</div>{opt}</div></button>)}
                              </div>
-                             {selectedQuizOption !== null && (
-                                 <div className="mt-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700 animate-fade-in">
-                                     <div className="flex items-center gap-2 mb-2">
-                                         <Info className="h-4 w-4 text-indigo-400" />
-                                         <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Analysis</div>
-                                     </div>
-                                     <p className="text-sm text-slate-300 leading-relaxed">{dailyQuiz.explanation}</p>
-                                 </div>
-                             )}
                          </div>
                      )}
                  </div>
                  <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 flex flex-col justify-between">
                      <div className="mb-6"><h3 className="text-slate-400 font-medium mb-4 flex items-center gap-2"><Target className="h-4 w-4 text-indigo-400" /> Career Progress</h3><div className="flex items-end gap-2 mb-2"><span className="text-5xl font-bold text-white">{progress}%</span><span className="text-sm text-slate-500 mb-1.5">complete</span></div><div className="h-2 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-indigo-500" style={{width: `${progress}%`}}></div></div></div>
                      <div className="space-y-4">
-                         <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between"><div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Days Left</div><div className="text-xl font-bold text-white">{calendarDaysLeft} Days</div></div><Clock className="h-5 w-5 text-slate-600" /></div>
+                         <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between"><div><div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Days Pending</div><div className="text-xl font-bold text-white">{daysRemaining} Days</div></div><Clock className="h-5 w-5 text-slate-600" /></div>
                          <div className={`p-4 rounded-2xl border flex items-center justify-between ${pacing.status === 'ahead' ? 'bg-emerald-500/10 border-emerald-500/20' : pacing.status === 'behind' ? 'bg-red-500/10 border-red-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}><div><div className={`text-xs font-bold uppercase tracking-wider mb-1 ${pacing.status === 'ahead' ? 'text-emerald-400' : pacing.status === 'behind' ? 'text-red-400' : 'text-blue-400'}`}>Current Pace</div><div className="text-sm font-bold text-white">{pacing.message}</div></div><TrendingUp className="h-5 w-5" /></div>
                      </div>
                  </div>
@@ -979,13 +818,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                      <div className="relative group w-full sm:w-64"><Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" /><input type="text" placeholder="Search insights..." className="w-full pl-9 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-indigo-500 outline-none transition-all text-sm" value={homeSearchQuery} onChange={(e) => setHomeSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleHomeSearch()} /></div>
                  </div>
                  <div className="space-y-1">
-                     {isNewsLoading ? Array.from({length: 10}).map((_, i) => <div key={i} className="h-16 bg-slate-800/50 rounded-xl animate-pulse my-2"></div>) : news.length === 0 ? <div className="text-slate-500 text-center py-8">No recent headlines found. Try a different search query.</div> : news.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="group flex items-center justify-between p-4 rounded-xl hover:bg-slate-800 transition-all border border-transparent hover:border-slate-700"><div className="flex items-center gap-4"><span className="text-xs font-black text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-md border border-indigo-500/20 w-24 truncate text-center shrink-0 uppercase tracking-tighter">{item.source}</span><h3 className="text-sm md:text-base font-medium text-slate-300 group-hover:text-white transition-colors line-clamp-1">{item.title}</h3></div><ExternalLink className="h-4 w-4 text-slate-600 group-hover:text-indigo-400 transition-colors shrink-0" /></a>)}
+                     {isNewsLoading ? Array.from({length: 10}).map((_, i) => <div key={i} className="h-16 bg-slate-800/50 rounded-xl animate-pulse my-2"></div>) : news.length === 0 ? <div className="text-slate-500 text-center py-8">No recent headlines found.</div> : news.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="group flex items-center justify-between p-4 rounded-xl hover:bg-slate-800 transition-all border border-transparent hover:border-slate-700"><div className="flex items-center gap-4"><span className="text-xs font-black text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-md border border-indigo-500/20 w-24 truncate text-center shrink-0 uppercase tracking-tighter">{item.source}</span><h3 className="text-sm md:text-base font-medium text-slate-300 group-hover:text-white transition-colors line-clamp-1">{item.title}</h3></div><ExternalLink className="h-4 w-4 text-slate-600 group-hover:text-indigo-400 transition-colors shrink-0" /></a>)}
                  </div>
             </div>
           </div>
         );
       case 'roadmap':
-        return <Roadmap roadmap={roadmap} user={user} onSubscribe={handleSubscribe} onUpdateProgress={handleProgress} onReset={handleResetRoadmap} onResetPhase={handleResetPhase} onSwitchCareer={handleSwitchCareer} onEditTargetDate={() => { setPendingTargetDate(currentCareerDetails?.targetCompletionDate || ''); setShowDateEditModal(true); }} pacing={pacing} isLoading={isRoadmapLoading} daysRemaining={tasksLeftCount} />;
+        return <Roadmap roadmap={roadmap} user={user} onSubscribe={handleSubscribe} onUpdateProgress={handleProgress} onReset={handleResetRoadmap} onResetPhase={handleResetPhase} onSwitchCareer={handleSwitchCareer} onEditTargetDate={() => { setPendingTargetDate(currentCareerDetails?.targetCompletionDate || ''); setShowDateEditModal(true); }} pacing={pacing} isLoading={isRoadmapLoading} daysRemaining={daysRemaining} />;
       case 'practice':
           return (
               <div className="bg-slate-900 rounded-3xl border border-slate-800 min-h-[80vh] flex flex-col overflow-hidden">
@@ -1063,7 +902,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                           )) : <div className="col-span-2 text-center py-10 text-slate-500">No matching interview questions in local bank.</div>}
                                       </div>
                                       {companyFilter !== 'AI Challenge' && (
-                                          <button onClick={() => handleLoadMoreInterview(companyFilter === 'All' ? 'Startups' : companyFilter)} disabled={isLoadingMore} className="w-full py-4 mt-8 bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                                          <button onClick={handleLoadMoreInterview} disabled={isLoadingMore} className="w-full py-4 mt-8 bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
                                               {isLoadingMore ? <RefreshCw className="h-5 w-5 animate-spin"/> : <PlusCircle className="h-5 w-5"/>} 
                                               {isLoadingMore ? 'Processing...' : 'Architect More Interview Data'}
                                           </button>
@@ -1191,7 +1030,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <button onClick={() => setIsChatOpen(!isChatOpen)} className="fixed bottom-24 md:bottom-10 right-4 md:right-10 w-14 h-14 bg-indigo-600 hover:bg-indigo-500 rounded-full shadow-2xl shadow-indigo-500/40 flex items-center justify-center z-[60] transition-transform hover:scale-105 active:scale-95">{isChatOpen ? <X className="h-6 w-6 text-white" /> : <MessageSquare className="h-6 w-6 text-white" />}</button>
       <ChatWindow isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} careerTitle={career.title} history={chatHistory} onSend={handleSendMessage} isTyping={isChatTyping} />
       {showCelebration && <CelebrationModal onClose={() => setShowCelebration(false)} />}
-      {phaseFeedback && <PhaseFeedbackModal phaseName={phaseFeedback.phaseName} feedback={phaseFeedback.feedback} isAhead={phaseFeedback.isAhead} onClose={() => setPhaseFeedback(null)} />}
       {phaseAdaptationState && <PhaseAdaptationModal status={phaseAdaptationState.status} diff={phaseAdaptationState.diff} onOptionSelect={handlePhaseAdaptationOption} onClose={() => setPhaseAdaptationState(null)} />}
       {showFeedbackModal && <FeedbackModal onClose={() => setShowFeedbackModal(false)} text={feedbackText} setText={setFeedbackText} />}
       {confirmAction && <ConfirmationModal action={confirmAction} onConfirm={confirmAction.type === 'reset_all' ? executeResetAll : executeDeleteAccount} onCancel={() => setConfirmAction(null)} />}
@@ -1199,7 +1037,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {showDateEditModal && <DateEditModal date={pendingTargetDate} setDate={setPendingTargetDate} onConfirm={initiateDateUpdate} onCancel={() => setShowDateEditModal(false)} />}
       {showDateStrategyModal && <DateStrategyModal type={dateStrategyType} onAdapt={(t) => handleAdaptation(t, pendingTargetDate)} onManual={() => handleDateUpdateWithoutAI(pendingTargetDate)} onClose={() => setShowDateStrategyModal(false)} />}
       {isAdapting && <AdaptingOverlay />}
-      {toast && <div className="fixed bottom-24 md:bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 border border-emerald-500/50 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-fade-in z-[100]"><CheckCircle2 className="h-5 w-5 text-emerald-400" /><span className="font-medium text-sm">{toast.message}</span></div>}
+      {toast && <div className="fixed bottom-24 md:bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 border border-emerald-500/50 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-fade-in z-[100]"><CheckCircle2 className="h-5 w-5 text-emerald-500" /><span className="font-medium text-sm">{toast.message}</span></div>}
     </div>
   );
 };

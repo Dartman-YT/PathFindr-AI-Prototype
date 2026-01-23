@@ -2,7 +2,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { CareerOption, RoadmapPhase, NewsItem, RoadmapItem, SkillQuestion, DailyQuizItem, InterviewQuestion, PracticeQuestion, SimulationScenario, ChatMessage, RoadmapData } from '../types';
 
 const cleanJsonString = (str: string): string => {
+  // Remove markdown code blocks if present
   let cleaned = str.replace(/```json\n?|```/g, "").trim();
+  
+  // Find the actual boundaries of the JSON object/array to ignore surrounding text
   const startBrace = cleaned.indexOf('{');
   const startBracket = cleaned.indexOf('[');
   let startIndex = -1;
@@ -21,70 +24,98 @@ const cleanJsonString = (str: string): string => {
         cleaned = cleaned.substring(startIndex, endIndex + 1);
     }
   }
+
+  // Fix trailing commas before closing braces or brackets
   cleaned = cleaned.replace(/,\s*([\]}])/g, "$1");
+  
   return cleaned;
+};
+
+const getAI = () => {
+  try {
+    if (!process.env.API_KEY) throw new Error("Missing API Key");
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  } catch (e) {
+    console.warn("API Key missing or invalid. App will use fallback mode.");
+    return null;
+  }
 };
 
 const NOVA_PERSONA = `
   You are "Nova", a world-class AI Career Architect and Psychologist. 
-  Your personality is futuristic, encouraging, analytical, and highly structured. 
-  You specialize in matching obscure psychological traits to high-growth industry roles in the 2024-2025 economy.
+  Your personality is futuristic, encouraging, analytical, and structured. 
+  You use industry data and psychological profiling to architect careers.
 `;
 
-export const calculateRemainingDays = (phases: RoadmapPhase[]): number => {
-  return phases.reduce((acc, phase) => acc + (phase.items?.filter(item => item.status === 'pending').length || 0), 0);
-};
+export const analyzeInterests = async (
+  inputs: { question: string, answer: string }[],
+  additionalComments: string,
+  excludedCareerTitles: string[] = []
+): Promise<CareerOption[]> => {
+  const ai = getAI();
+  if (!ai) return [];
 
-export const analyzeInterests = async (answers: {question: string, answer: string}[], comment: string, excludeTitles?: string[]): Promise<CareerOption[]> => {
-  if (!process.env.API_KEY) return [];
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const exclusionContext = excludedCareerTitles.length > 0
+    ? `IMPORTANT: Do NOT suggest the following careers as they are already listed: ${excludedCareerTitles.join(', ')}.`
+    : '';
+
   const prompt = `
     ${NOVA_PERSONA}
-    Analyze these psychometric responses: ${JSON.stringify(answers)}.
-    Additional context: ${comment}.
-    ${excludeTitles ? `Exclude these existing suggestions: ${excludeTitles.join(', ')}.` : ''}
-    
-    Identify 3 distinct, high-growth career paths in the current global economy that align with these traits.
-    Return ONLY a JSON array of objects with these properties:
-    { "id": "string", "title": "string", "description": "string", "fitScore": number (0-100), "reason": "string" }
+    Analyze the user's psychological and professional profile:
+    ${inputs.map((inp, i) => `${i + 1}. Q: ${inp.question} \n   A: ${inp.answer}`).join('\n')}
+    Additional User Context: "${additionalComments}"
+    ${exclusionContext}
+
+    STRICT TASK:
+    Perform a multi-dimensional analysis (Skills, Interests, Personality, Market Demand).
+    Provide the top 3 most scientifically aligned career paths. 
+    Calculate a fitScore (0-100) using a weighted algorithm.
+    Provide a deeply analytical "reason" for each match.
+
+    Return JSON array: [{id, title, description, fitScore, reason}]
   `;
+
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      config: {
+        responseMimeType: "application/json"
+      },
     });
-    return JSON.parse(cleanJsonString(response.text || '[]'));
+    const text = cleanJsonString(response.text || "[]");
+    return JSON.parse(text);
   } catch (e) {
-    console.error("Interest analysis failed:", e);
+    console.error("Analysis failed:", e);
     return [];
   }
 };
 
 export const searchCareers = async (query: string): Promise<CareerOption[]> => {
-  if (!process.env.API_KEY) return [];
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAI();
+  if (!ai) return [];
+
   const prompt = `
     ${NOVA_PERSONA}
-    STRICT SEARCH PROTOCOL: Find career paths that are a DIRECT match or high-relevance specialization of the query: "${query}".
-    
-    ACCURACY RULES:
-    1. LITERAL MATCH: If "${query}" is a recognized job title, the first result MUST be that exact role.
-    2. DOMAIN RELEVANCE: All 3 results MUST be professional careers within the same industry as "${query}".
-    3. NO CREATIVE HALLUCINATIONS: Do not suggest unrelated roles just because they are high-growth (e.g. if searching 'Doctor', do not suggest 'Software Engineer').
-    4. VARIATION: Suggest 3 distinct levels or specializations of "${query}" (e.g. if 'Teacher', suggest 'Primary Teacher', 'Special Education Teacher', 'Educational Consultant').
-    5. FAIL-SAFE: If the query is nonsense, return an empty array [].
-    
-    Return ONLY a JSON array of 3 objects with these properties:
-    { "id": "string", "title": "string", "description": "string", "fitScore": number (95-100 for direct matches), "reason": "string" }
+    The user is searching for: "${query}".
+
+    STRICT TASK:
+    1. Identify the top 3 professional career paths that most accurately match or relate to this search term.
+    2. The first result MUST be the most direct interpretation of "${query}".
+    3. Calculate a high-fidelity "fitScore" (0-100) based strictly on how well each career matches the search intent.
+    4. Provide a concise description and a professional "reason" for the match.
+    5. Return exactly 3 items.
+
+    Return JSON array: [{"id": "string", "title": "string", "description": "string", "fitScore": number, "reason": "string"}]
   `;
+
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      config: { responseMimeType: "application/json" },
     });
-    return JSON.parse(cleanJsonString(response.text || '[]'));
+    return JSON.parse(cleanJsonString(response.text || "[]"));
   } catch (e) {
     console.error("Career search failed:", e);
     return [];
@@ -99,9 +130,7 @@ export const generateRoadmap = async (
   focusAreas: string,
   adaptationContext?: any
 ): Promise<RoadmapData> => {
-  if (!process.env.API_KEY) return { phases: [], recommendedCertificates: [], recommendedInternships: [] };
-
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAI();
   const start = new Date();
   start.setHours(12, 0, 0, 0);
 
@@ -110,40 +139,46 @@ export const generateRoadmap = async (
     const parts = targetDate.split('-');
     if (parts.length === 3) {
       const end = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), 12, 0, 0);
-      totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      const diffTime = end.getTime() - start.getTime();
+      totalDays = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1);
     }
   }
 
   const prompt = `
       ${NOVA_PERSONA}
       Architect a professional roadmap for: "${careerTitle}".
-      Duration: ${totalDays} Days. Level: ${expLevel}. Focus: "${focusAreas}".
+      Total Duration: ${totalDays} Days. Experience Level: ${expLevel}.
+      Additional Focus: "${focusAreas}".
       
       STRICT ARCHITECTURAL RULES:
-      1. QUANTITY: You MUST generate EXACTLY ${totalDays} total items across all phases. Every single day from 1 to ${totalDays} MUST have exactly one task.
-      2. MAPPING: Each task MUST have a "dayIndex" property from 1 to ${totalDays}.
-      3. LOGIC: Tasks must progress logically from foundational to advanced.
-      4. CONTENT: Each description must be 25-35 words. 2-3 REAL resources per task.
+      1. Every task is essentially a 1-day milestone.
+      2. Tasks within phases MUST ONLY be of these two types:
+         - "skill": Learning core concepts or technical topics.
+         - "project": Building practical features, MVPs, or scripts.
+      3. DO NOT include "certificate" or "internship" as tasks within the phases. 
+      4. Place industry certifications in "recommendedCertificates" and internships/placements in "recommendedInternships".
+      5. The VERY LAST item of the VERY LAST phase MUST be a "Final Capstone Revision & Confidence Project" (type: project). 
+         It must be a comprehensive project that revises previous concepts and builds absolute confidence in the user's ability to enter the industry.
+      6. Each task item MUST have:
+         {
+           "title": "Clear and descriptive task name",
+           "description": "Short summary",
+           "type": "skill" | "project",
+           "importance": "high" | "medium" | "low",
+           "explanation": "Deep professional guidance",
+           "suggestedResources": [{"title": "Name", "url": "URL"}]
+         }
       
       Output JSON format: 
       {
-        "phases": [{ 
-          "phaseName": "Phase Title", 
-          "items": [{ 
-            "dayIndex": number,
-            "title": "string", 
-            "description": "string", 
-            "type": "skill" | "project", 
-            "explanation": "string", 
-            "suggestedResources": [{"title": "string", "url": "string"}] 
-          }] 
-        }],
-        "recommendedCertificates": [{ "title": "string", "provider": "string", "url": "string", "relevance": "string" }],
-        "recommendedInternships": [{ "title": "string", "company": "string", "url": "string", "description": "string" }]
+        "phases": [{ "phaseName": "Phase Title", "items": [...] }],
+        "recommendedCertificates": [{ "title": "Cert Name", "provider": "Coursera/AWS/etc", "url": "URL", "relevance": "Why this cert?" }],
+        "recommendedInternships": [{ "title": "Role Name", "company": "Example Corp", "url": "URL", "description": "Short summary" }]
       }
     `;
 
   try {
+    if (!ai) throw new Error("AI missing");
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: prompt,
@@ -152,16 +187,17 @@ export const generateRoadmap = async (
     const data = JSON.parse(cleanJsonString(response.text || '{}'));
     
     let taskIdCounter = 1;
-    const genId = Date.now().toString(36);
+    const generationId = Date.now().toString(36);
 
     const processedPhases = (data.phases || []).map((phase: any, pIdx: number) => ({
       ...phase,
       items: (phase.items || []).map((item: any) => ({
         ...item,
-        id: `task-${genId}-${pIdx}-${taskIdCounter++}`,
+        id: `task-${generationId}-${pIdx}-${taskIdCounter++}`,
         status: 'pending',
         duration: '1 day',
-        type: item.type === 'project' ? 'project' : 'skill'
+        type: item.type === 'project' ? 'project' : 'skill',
+        suggestedResources: Array.isArray(item.suggestedResources) ? item.suggestedResources : []
       }))
     }));
 
@@ -171,86 +207,146 @@ export const generateRoadmap = async (
       recommendedInternships: data.recommendedInternships || []
     };
   } catch (e) {
-    console.error("Roadmap generation failed:", e);
+    console.error("Roadmap generation failed", e);
     return { phases: [], recommendedCertificates: [], recommendedInternships: [] };
   }
 };
 
 export const generatePracticeDataBatch = async (careerTitle: string): Promise<any> => {
-  if (!process.env.API_KEY) return { topics: [], questions: [], interviews: {} };
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAI();
+  if (!ai) return { topics: [], questions: [], interviews: {} };
   
   const prompt = `
     ${NOVA_PERSONA}
-    Generate a concise practice set for: "${careerTitle}".
+    Generate a massive, high-fidelity practice and interview set for: "${careerTitle}".
     
     REQUIREMENTS:
-    1. List 8 technical sub-topics.
-    2. Generate 15 high-quality technical MCQs. {id, question, options[4], correctIndex, explanation, topic}.
-    3. Generate 15 targeted interview questions tagged by company (Google, Amazon, Microsoft, Startups).
+    1. List 12 specific technical sub-topics for this career.
+    2. Generate exactly 50 high-quality technical MCQs (Questions). Distribute them across the 12 topics. Format: {id, question, options[4], correctIndex, explanation, topic}.
+    3. Generate exactly 50 highly targeted interview questions. You MUST tag them by company.
+       Distribution:
+       - Google: 8 questions (focus on algorithms/scale)
+       - Amazon: 8 questions (focus on leadership/LP)
+       - Microsoft: 8 questions (focus on engineering excellence)
+       - Meta: 8 questions (focus on product/impact)
+       - Netflix: 8 questions (focus on culture/efficiency)
+       - Startups: 10 questions (focus on versatility/speed)
+       Format: {id, question, answer, explanation, company}.
     
-    Return ONE JSON object: { "topics": [...], "questions": [...], "interviews": { "Google": [...], "Amazon": [...], "Microsoft": [...], "Startups": [...] } }
+    CRITICAL: Ensure "company" tag is exactly one of: "Google", "Amazon", "Microsoft", "Meta", "Netflix", "Startups".
+    Ensure JSON is valid, escaped, and complete. 
+    Return exactly ONE JSON object: { "topics": [...], "questions": [...], "interviews": { "Google": [...], "Amazon": [...], "Microsoft": [...], "Meta": [...], "Netflix": [...], "Startups": [...] } }
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      config: { 
+        responseMimeType: "application/json"
+      }
     });
     
-    return JSON.parse(cleanJsonString(response.text || '{}'));
+    const rawText = response.text || '{}';
+    const cleanedText = cleanJsonString(rawText);
+    const data = JSON.parse(cleanedText);
+    
+    const companies = ["Google", "Amazon", "Microsoft", "Meta", "Netflix", "Startups"];
+    if (!data.interviews) data.interviews = {};
+    companies.forEach(company => {
+      if (!data.interviews[company]) data.interviews[company] = [];
+    });
+
+    return data;
   } catch (e) {
-    console.error("Batch generation failed:", e);
+    console.error("Batch generation failed", e);
     return { topics: [], questions: [], interviews: {} };
   }
 };
 
-export const fetchTechNews = async (topic: string, userId?: string, careerId?: string): Promise<NewsItem[]> => {
-  if (!process.env.API_KEY) return [];
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export const calculateRemainingDays = (roadmap: RoadmapPhase[]): number => {
+  if (!roadmap) return 0;
+  let totalDays = 0;
+  roadmap.forEach(p => {
+    if (p.items) {
+      p.items.forEach(i => {
+        if (i.status !== 'completed') {
+          totalDays += 1;
+        }
+      });
+    }
+  });
+  return totalDays;
+};
+
+export const fetchTechNews = async (topic: string): Promise<NewsItem[]> => {
+  const ai = getAI();
+  if (!ai) return [];
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Latest professional tech news about "${topic}". Provide working links to articles.`,
+      contents: `Find exactly 10 high-quality, professional news headlines about "${topic}" from industry leaders. Focus on breakthroughs, market shifts, and expert insights.`,
       config: { tools: [{ googleSearch: {} }] }
     });
     
-    const newsItems: NewsItem[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const newsItems: NewsItem[] = [];
+    
     chunks.forEach((c: any) => {
       if (c.web && c.web.uri && c.web.title) {
-        if (!newsItems.some(existing => existing.url === c.web.uri)) {
-            newsItems.push({
-              title: c.web.title,
-              url: c.web.uri,
-              source: new URL(c.web.uri).hostname.replace('www.', '').split('.')[0].toUpperCase(),
-              summary: '',
-              date: 'Recent'
-            });
+        let source = 'Insights';
+        try {
+          const urlObj = new URL(c.web.uri);
+          const hostname = urlObj.hostname.toLowerCase().replace('width.', '');
+          
+          if (hostname.includes('vertexaisearch') || hostname.includes('google.com') || hostname.includes('googleapis')) {
+            source = 'Tech Feed';
+          } else {
+            source = hostname.split('.')[0].toUpperCase();
+          }
+        } catch (e) {
+          source = 'Verified';
         }
+
+        let cleanTitle = c.web.title;
+        cleanTitle = cleanTitle.replace(/vertexaisearch|internal_id|session_id|google_search_result/gi, "").trim();
+        if (cleanTitle.endsWith('-')) cleanTitle = cleanTitle.slice(0, -1).trim();
+
+        newsItems.push({
+          title: cleanTitle,
+          url: c.web.uri,
+          source: source,
+          summary: '',
+          date: 'Recent'
+        });
       }
     });
-    return newsItems;
-  } catch (e) { return []; }
+
+    return newsItems.slice(0, 10);
+  } catch (e) {
+    console.error("News fetch failed", e);
+    return [];
+  }
 };
 
-export const generateDailyQuiz = async (careerTitle: string, userId?: string): Promise<DailyQuizItem | null> => {
-  if (!process.env.API_KEY) return null;
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export const generateDailyQuiz = async (careerTitle: string): Promise<DailyQuizItem | null> => {
+  const ai = getAI();
+  if (!ai) return null;
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Generate a challenging technical multiple choice question for a ${careerTitle}. JSON: {question, options[4], correctIndex, explanation}`,
+      contents: `Create one technical MCQ for ${careerTitle}. JSON: {question, options[4], correctIndex, explanation}`,
       config: { responseMimeType: "application/json" }
     });
     return JSON.parse(cleanJsonString(response.text || 'null'));
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 };
 
 export const generateSkillQuiz = async (careerTitle: string): Promise<SkillQuestion[]> => {
-  if (!process.env.API_KEY) return [];
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAI();
+  if (!ai) return [];
   const prompt = `${NOVA_PERSONA} Generate a 5-question skill calibration quiz for: ${careerTitle}. JSON: [{id, question, options[], correctIndex, difficulty}].`;
   try {
     const response = await ai.models.generateContent({
@@ -259,16 +355,70 @@ export const generateSkillQuiz = async (careerTitle: string): Promise<SkillQuest
       config: { responseMimeType: "application/json" }
     });
     return JSON.parse(cleanJsonString(response.text || '[]'));
-  } catch (e) { return []; }
+  } catch (e) {
+    return [];
+  }
 };
 
-export const generateSimulationScenario = async (careerTitle: string): Promise<SimulationScenario> => {
-  if (!process.env.API_KEY) throw new Error("API Key missing");
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export const generatePracticeTopics = async (careerTitle: string): Promise<string[]> => {
+  const ai = getAI();
+  if (!ai) return ["Core Concepts"];
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Simulate a critical workplace scenario for a ${careerTitle}. JSON: {id, scenario, question, options[4], correctIndex, explanation}`,
+      contents: `List 10 specific topics for ${careerTitle}. JSON array of strings.`,
+      config: { responseMimeType: "application/json" }
+    });
+    return JSON.parse(cleanJsonString(response.text || '[]'));
+  } catch (e) {
+    return ["Core Concepts"];
+  }
+};
+
+export const generatePracticeQuestions = async (careerTitle: string, topic?: string, searchQuery?: string): Promise<PracticeQuestion[]> => {
+  const ai = getAI();
+  if (!ai) return [];
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: `Generate 15 additional technical MCQs for ${careerTitle} focusing on ${topic || 'diverse concepts'}. JSON array: {id, question, options[4], correctIndex, explanation, topic}`,
+      config: { responseMimeType: "application/json" }
+    });
+    return JSON.parse(cleanJsonString(response.text || '[]'));
+  } catch (e) {
+    return [];
+  }
+};
+
+export const generateCompanyInterviewQuestions = async (careerTitle: string, filter: string, customParams?: any): Promise<InterviewQuestion[]> => {
+  const ai = getAI();
+  if (!ai) return [];
+  const prompt = `Generate 15 additional targeted interview questions for ${careerTitle} specifically for ${filter} style interviews. JSON array: {id, question, answer, explanation, company}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    });
+    const results = JSON.parse(cleanJsonString(response.text || '[]'));
+    return results.map((r: any, idx: number) => ({
+        ...r,
+        id: r.id || `iq-${Date.now()}-${idx}`,
+        company: r.company || filter
+    }));
+  } catch (e) {
+    return [];
+  }
+};
+
+export const generateSimulationScenario = async (careerTitle: string): Promise<SimulationScenario> => {
+  const ai = getAI();
+  try {
+    if (!ai) throw new Error();
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Create a job simulation scenario for ${careerTitle}. JSON: {id, scenario, question, options[4], correctIndex, explanation}`,
       config: { responseMimeType: "application/json" }
     });
     return JSON.parse(cleanJsonString(response.text || '{}'));
@@ -277,54 +427,16 @@ export const generateSimulationScenario = async (careerTitle: string): Promise<S
   }
 };
 
-export const generateChatResponse = async (message: string, careerTitle: string, history: ChatMessage[], context?: string): Promise<string> => {
-  if (!process.env.API_KEY) return "AI Offline.";
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `System: ${NOVA_PERSONA} Focus: ${careerTitle}. Context: ${context}. History: ${JSON.stringify(history.slice(-3))}. User: ${message}`;
-  try {
-    const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
-    return response.text || "Busy.";
-  } catch (e) { return "Connection error."; }
-};
-
-export const generatePracticeTopics = async (careerTitle: string) => {
-  if (!process.env.API_KEY) return [];
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `List 5 technical sub-topics for a ${careerTitle}. JSON: ["topic1", "topic2", ...]`;
+export const generateChatResponse = async (message: string, careerTitle: string, history: ChatMessage[]): Promise<string> => {
+  const ai = getAI();
+  if (!ai) return "I am currently in architect mode (offline).";
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
+      contents: `User: ${message}. Current focus: ${careerTitle}. Context: This is a professional career architect chat. Answer concisely and helpful.`
     });
-    return JSON.parse(cleanJsonString(response.text || '[]'));
-  } catch (e) { return []; }
-};
-
-export const generatePracticeQuestions = async (careerTitle: string, topic?: string): Promise<PracticeQuestion[]> => {
-  if (!process.env.API_KEY) return [];
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `Generate 5 technical MCQs for ${careerTitle} ${topic ? `focused on ${topic}` : ''}. JSON: [{id, question, options[4], correctIndex, explanation, topic}].`;
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-    return JSON.parse(cleanJsonString(response.text || '[]'));
-  } catch (e) { return []; }
-};
-
-export const generateCompanyInterviewQuestions = async (careerTitle: string, company: string, params?: any): Promise<InterviewQuestion[]> => {
-  if (!process.env.API_KEY) return [];
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `Generate 5 interview questions for ${careerTitle} at ${company}. ${params?.topic ? `Focus on ${params.topic}.` : ''} ${params?.difficulty ? `Difficulty: ${params.difficulty}.` : ''} JSON: [{id, question, answer, explanation, company}].`;
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-    return JSON.parse(cleanJsonString(response.text || '[]'));
-  } catch (e) { return []; }
+    return response.text || "I'm processing that. One moment.";
+  } catch (e) {
+    return "The architect is busy. Try again soon.";
+  }
 };
